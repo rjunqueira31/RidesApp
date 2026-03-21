@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard · CTW Rides</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-page="dashboard" class="app-body">
+    <div class="shell shell-wide">
+      <header class="app-topbar">
+        <a href="dashboard.html" class="brand-link">CTW Rides</a>
+        <div class="topbar-user">
+          <span id="current-user-pill" class="user-pill"></span>
+          <a href="profile.html" class="nav-link">Profile</a>
+          <button type="button" id="logout-button" class="button-secondary">Logout</button>
+        </div>
+      </header>
+
+      <main>
+        <section class="hub-hero">
+          <span class="eyebrow">Your commute hub</span>
+          <h1 id="dashboard-title">Welcome</h1>
+          <p class="section-copy">Choose one area to continue.</p>
+        </section>
+
+        <div class="hub-grid">
+          <a href="create-ride.html" class="hub-card hub-primary">
+            <span class="hub-label">01</span>
+            <h2>Create a ride</h2>
+            <p>Publish a new route with time, seats, car, and notes.</p>
+          </a>
+          <a href="search-rides.html" class="hub-card">
+            <span class="hub-label">02</span>
+            <h2>Search ride</h2>
+            <p>Browse available rides, request seats, and join ride chat.</p>
+          </a>
+          <a href="my-rides.html" class="hub-card">
+            <span class="hub-label">03</span>
+            <h2>My rides</h2>
+            <p>See rides you are driving and rides you joined as a passenger.</p>
+          </a>
+        </div>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

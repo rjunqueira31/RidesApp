@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login · CTW Rides</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-page="login" class="app-body">
+    <div class="shell shell-narrow">
+      <header class="simple-topbar">
+        <a href="index.html" class="brand-link">CTW Rides</a>
+        <nav class="marketing-actions">
+          <a href="signup.html" class="button-link">Signup</a>
+        </nav>
+      </header>
+
+      <main class="center-layout">
+        <section class="form-card">
+          <span class="eyebrow">Welcome back</span>
+          <h1>Login</h1>
+          <p class="section-copy">Use your existing profile email to enter the app.</p>
+          <div id="page-feedback" class="feedback" aria-live="polite"></div>
+
+          <form id="login-form" class="stack-form">
+            <label>
+              Email <span class="label-required" aria-hidden="true">*</span>
+              <input type="email" name="email" placeholder="your.name@email.com" required />
+            </label>
+            <label>
+              Password <span class="label-required" aria-hidden="true">*</span>
+              <input type="password" name="password" placeholder="Your password" required />
+            </label>
+            <button type="submit">Continue</button>
+          </form>
+        </section>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,104 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  DEFAULT_USER
+  MANAGER_USER
+}
+
+enum SeatRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+enum OfficeLocation {
+  LISBON
+  PORTO
+  BRAGA
+}
+
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  phone        String
+  defaultCar   String?
+  defaultOffice OfficeLocation?
+  defaultHome   String?
+  role         UserRole  @default(DEFAULT_USER)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  ridesDriven  Ride[]    @relation("RideDriver")
+  seatRequests SeatRequest[]
+  messages     Message[]
+}
+
+model Ride {
+  id               String    @id @default(cuid())
+  driverId         String
+  startPoint       String
+  endPoint         String
+  startWindowStart DateTime
+  startWindowEnd   DateTime
+  seatsTotal       Int
+  seatsLeft        Int
+  car              String
+  notes            String?
+  createdAt        DateTime  @default(now())
+
+  driver           User      @relation("RideDriver", fields: [driverId], references: [id], onDelete: Cascade)
+  requests         SeatRequest[]
+  messages         Message[]
+
+  @@index([driverId])
+  @@index([startWindowStart])
+  @@index([startWindowEnd])
+}
+
+model SeatRequest {
+  id          String            @id @default(cuid())
+  rideId      String
+  passengerId String
+  message     String?
+  status      SeatRequestStatus @default(PENDING)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  ride        Ride              @relation(fields: [rideId], references: [id], onDelete: Cascade)
+  passenger   User              @relation(fields: [passengerId], references: [id], onDelete: Cascade)
+
+  @@index([rideId])
+  @@index([passengerId])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  rideId    String
+  senderId  String
+  text      String
+  createdAt DateTime @default(now())
+
+  ride      Ride     @relation(fields: [rideId], references: [id], onDelete: Cascade)
+  sender    User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([rideId])
+  @@index([senderId])
+}
+
+model Session {
+  sid    String   @id @db.VarChar
+  sess   Json     @db.Json
+  expire DateTime @db.Timestamp(6)
+
+  @@index([expire], map: "IDX_session_expire")
+  @@map("session")
+}

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Profile · CTW Rides</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-page="profile" class="app-body">
+    <div class="shell shell-narrow">
+      <header class="app-topbar">
+        <a href="dashboard.html" class="brand-link">CTW Rides</a>
+        <div class="topbar-user">
+          <span id="current-user-pill" class="user-pill"></span>
+          <a href="dashboard.html" class="nav-link">Dashboard</a>
+          <button type="button" id="logout-button" class="button-secondary">Logout</button>
+        </div>
+      </header>
+
+      <main class="center-layout">
+        <section class="form-card">
+          <span class="eyebrow">Account settings</span>
+          <h1>Edit profile</h1>
+          <p class="section-copy">Update your profile details, route defaults, and default car.</p>
+          <div id="page-feedback" class="feedback" aria-live="polite"></div>
+
+          <form id="profile-update-form" class="stack-form">
+            <label>
+              Name <span class="label-required" aria-hidden="true">*</span>
+              <input type="text" name="name" required />
+            </label>
+            <label>
+              Email <span class="label-required" aria-hidden="true">*</span>
+              <input type="email" name="email" required />
+            </label>
+            <label>
+              Phone number <span class="label-required" aria-hidden="true">*</span>
+              <input type="tel" name="phone" required />
+            </label>
+            <label>
+              Default car <span class="label-optional">(optional)</span>
+              <input type="text" name="defaultCar" />
+            </label>
+            <label>
+              Default office <span class="label-optional">(optional)</span>
+              <select name="defaultOffice">
+                <option value="">Select an office</option>
+                <option value="LISBON">Lisbon</option>
+                <option value="PORTO">Porto</option>
+                <option value="BRAGA">Braga</option>
+              </select>
+            </label>
+            <label>
+              Default home location <span class="label-optional">(optional)</span>
+              <input type="text" name="defaultHome" />
+            </label>
+            <button type="submit">Save changes</button>
+          </form>
+        </section>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

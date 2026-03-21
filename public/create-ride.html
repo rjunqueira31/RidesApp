@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Create ride · CTW Rides</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-page="create-ride" class="app-body">
+    <div class="shell shell-wide">
+      <header class="app-topbar">
+        <a href="dashboard.html" class="brand-link">CTW Rides</a>
+        <div class="topbar-user">
+          <span id="current-user-pill" class="user-pill"></span>
+          <a href="dashboard.html" class="nav-link">Dashboard</a>
+          <a href="profile.html" class="nav-link">Profile</a>
+          <button type="button" id="logout-button" class="button-secondary">Logout</button>
+        </div>
+      </header>
+
+      <main class="page-grid single-column">
+        <section class="panel-card">
+          <span class="eyebrow">Driver action</span>
+          <h1>Create a ride</h1>
+          <p class="section-copy">Publish a ride for colleagues to find and request.</p>
+          <div id="page-feedback" class="feedback" aria-live="polite"></div>
+
+          <form id="ride-form" class="stack-form two-column-form">
+            <div class="route-fields full-width">
+              <label>
+                Start point <span class="label-required" aria-hidden="true">*</span>
+                <input type="text" name="startPoint" placeholder="Sintra" required />
+              </label>
+              <button type="button" id="swap-route-button" class="button-secondary route-swap-button" aria-label="Swap start and end points" title="Swap start and end points">
+                <span aria-hidden="true">⇄</span>
+              </button>
+              <label>
+                End point <span class="label-required" aria-hidden="true">*</span>
+                <input type="text" name="endPoint" placeholder="Lisbon Office" required />
+              </label>
+            </div>
+            <div class="schedule-fields full-width">
+              <label>
+                Ride date <span class="label-required" aria-hidden="true">*</span>
+                <input type="date" name="rideDate" required />
+              </label>
+              <div class="schedule-time-fields">
+                <label>
+                  Earliest departure <span class="label-required" aria-hidden="true">*</span>
+                  <input type="time" name="startTime" required step="900" />
+                </label>
+                <label>
+                  Latest departure <span class="label-required" aria-hidden="true">*</span>
+                  <input type="time" name="endTime" required step="900" />
+                </label>
+              </div>
+            </div>
+            <label>
+              Car <span class="label-required" aria-hidden="true">*</span>
+              <input type="text" name="car" placeholder="BMW i4" required />
+            </label>
+            <label>
+              Seats available <span class="label-required" aria-hidden="true">*</span>
+              <input type="number" name="seatsTotal" min="1" max="8" value="4" required />
+            </label>
+            <label class="full-width">
+              Notes <span class="label-optional">(optional)</span>
+              <textarea name="notes" rows="4" placeholder="Pickup near the train station at 08:00.&#10;Going through Ponte Vasco da Gama"></textarea>
+            </label>
+            <button type="submit" class="full-width">Publish ride</button>
+          </form>
+        </section>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
