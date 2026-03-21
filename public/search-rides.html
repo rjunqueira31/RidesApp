@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Search rides · CTW Rides</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-page="search-rides" class="app-body">
+    <div class="shell shell-wide">
+      <header class="app-topbar">
+        <a href="dashboard.html" class="brand-link">CTW Rides</a>
+        <div class="topbar-user">
+          <span id="current-user-pill" class="user-pill"></span>
+          <a href="dashboard.html" class="nav-link">Dashboard</a>
+          <a href="profile.html" class="nav-link">Profile</a>
+          <button type="button" id="logout-button" class="button-secondary">Logout</button>
+        </div>
+      </header>
+
+      <main class="page-grid single-column">
+        <section class="panel-card">
+          <span class="eyebrow">Passenger and driver area</span>
+          <h1>Search and manage rides</h1>
+          <p class="section-copy">Filter rides, request seats, manage passengers, and use chat.</p>
+          <div id="page-feedback" class="feedback" aria-live="polite"></div>
+          <p class="field-hint">All search filters are optional.</p>
+
+          <form id="search-form" class="toolbar search-toolbar">
+            <input type="text" name="driver" placeholder="Filter by driver" />
+            <input type="text" name="start" placeholder="Filter by start point" />
+            <input type="text" name="end" placeholder="Filter by end point" />
+            <label class="checkbox-field">
+              <input type="checkbox" name="openOnly" />
+              Only show rides with seats left
+            </label>
+            <button type="submit">Search</button>
+            <button type="button" id="reset-search" class="button-secondary">Reset</button>
+          </form>
+
+          <div id="rides-list" class="rides-grid"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Signup · CTW Rides</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-page="signup" class="app-body">
+    <div class="shell shell-narrow">
+      <header class="simple-topbar">
+        <a href="index.html" class="brand-link">CTW Rides</a>
+        <nav class="marketing-actions">
+          <a href="login.html" class="nav-link">Login</a>
+        </nav>
+      </header>
+
+      <main class="center-layout">
+        <section class="form-card">
+          <span class="eyebrow">Create your account</span>
+          <h1>Signup</h1>
+          <p class="section-copy">Create your profile to start sharing rides with coworkers.</p>
+          <div id="page-feedback" class="feedback" aria-live="polite"></div>
+
+          <form id="signup-form" class="stack-form">
+            <label>
+              Name <span class="label-required" aria-hidden="true">*</span>
+              <input type="text" name="name" placeholder="Ana Silva" required />
+            </label>
+            <label>
+              Email <span class="label-required" aria-hidden="true">*</span>
+              <input type="email" name="email" placeholder="ana.silva@email.com" required />
+            </label>
+            <label>
+              Password <span class="label-required" aria-hidden="true">*</span>
+              <input type="password" name="password" placeholder="Create a password" required />
+            </label>
+            <label>
+              Phone number <span class="label-required" aria-hidden="true">*</span>
+              <input type="tel" name="phone" placeholder="+351 912 345 678" required />
+            </label>
+            <label>
+              Default car <span class="label-optional">(optional)</span>
+              <input type="text" name="defaultCar" placeholder="BMW i4" />
+            </label>
+            <label>
+              Default office <span class="label-optional">(optional)</span>
+              <select name="defaultOffice">
+                <option value="">Select an office</option>
+                <option value="LISBON">Lisbon</option>
+                <option value="PORTO">Porto</option>
+                <option value="BRAGA">Braga</option>
+              </select>
+            </label>
+            <label>
+              Default home location <span class="label-optional">(optional)</span>
+              <input type="text" name="defaultHome" placeholder="Sintra" />
+            </label>
+            <button type="submit">Create profile</button>
+          </form>
+        </section>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
