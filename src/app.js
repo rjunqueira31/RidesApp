@@ -1,10 +1,12 @@
 require('dotenv').config();
 
+const {randomUUID} = require('crypto');
 const bcrypt = require('bcryptjs');
 const express = require('express');
 const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
 const path = require('path');
+const logger = require('./logger');
 const {
   createMessage,
   createProfile,
@@ -23,6 +25,17 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
+function requestLogContext(request) {
+  return {
+    requestId: request.requestId,
+    method: request.method,
+    path: request.path,
+    userId: request.currentUser?.id || request.session?.userId || null,
+    userRole: request.currentUser?.role || request.session?.userRole || null,
+    ip: request.ip,
+  };
+}
+
 app.use(session({
   store: new pgSession({
     conString: process.env.DATABASE_URL,
@@ -40,6 +53,31 @@ app.use(session({
 }));
 
 app.use(express.json());
+
+app.use((request, response, next) => {
+  request.requestId = randomUUID();
+  const startedAt = process.hrtime.bigint();
+
+  response.on('finish', () => {
+    const durationMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
+    const level = response.statusCode >= 500 ? 'error' :
+        response.statusCode >= 400           ? 'warn' :
+                                               'info';
+
+    logger[level]('http.request.completed', {
+      requestId: request.requestId,
+      method: request.method,
+      path: request.originalUrl,
+      statusCode: response.statusCode,
+      durationMs: Number(durationMs.toFixed(1)),
+      userId: request.currentUser?.id || request.session?.userId || null,
+      userRole: request.currentUser?.role || request.session?.userRole || null,
+      ip: request.ip,
+    });
+  });
+
+  next();
+});
 
 function assertRequired(value, label) {
   if (!String(value || '').trim()) {
@@ -83,6 +121,9 @@ function validateRideWindow(startWindowStart, startWindowEnd) {
 async function requireAuth(request, response, next) {
   try {
     if (!request.session.userId) {
+      logger.warn('auth.required', {
+        ...requestLogContext(request),
+      });
       response.status(401).json({error: 'Authentication required.'});
       return;
     }
@@ -90,6 +131,9 @@ async function requireAuth(request, response, next) {
     const profile = await getProfileById(request.session.userId);
 
     if (!profile) {
+      logger.warn('auth.session_user_missing', {
+        ...requestLogContext(request),
+      });
       request.session.destroy(() => undefined);
       response.status(401).json({error: 'Authentication required.'});
       return;
@@ -104,6 +148,9 @@ async function requireAuth(request, response, next) {
 
 function requireManager(request, response, next) {
   if (!request.currentUser || request.currentUser.role !== 'MANAGER_USER') {
+    logger.warn('auth.manager_required', {
+      ...requestLogContext(request),
+    });
     response.status(403).json({error: 'Forbidden'});
     return;
   }
@@ -159,8 +206,19 @@ app.post('/api/auth/signup', async (request, response, next) => {
     });
 
     createUserSession(request, profile);
+    logger.info('auth.signup.success', {
+      ...requestLogContext(request),
+      profileId: profile.id,
+      email: profile.email,
+      role: profile.role,
+    });
     response.status(201).json({profile});
   } catch (error) {
+    logger.warn('auth.signup.failed', {
+      ...requestLogContext(request),
+      email: request.body?.email,
+      error: logger.serializeError(error),
+    });
     next(error);
   }
 });
@@ -175,6 +233,10 @@ app.post('/api/auth/login', async (request, response, next) => {
     const user = await getAuthUserByEmail(email);
 
     if (!user) {
+      logger.warn('auth.login.failed_unknown_email', {
+        ...requestLogContext(request),
+        email,
+      });
       const error = new Error('Invalid email or password.');
       error.status = 401;
       throw error;
@@ -184,6 +246,11 @@ app.post('/api/auth/login', async (request, response, next) => {
         await bcrypt.compare(String(password), user.passwordHash);
 
     if (!isValidPassword) {
+      logger.warn('auth.login.failed_bad_password', {
+        ...requestLogContext(request),
+        email,
+        profileId: user.id,
+      });
       const error = new Error('Invalid email or password.');
       error.status = 401;
       throw error;
@@ -191,6 +258,12 @@ app.post('/api/auth/login', async (request, response, next) => {
 
     const profile = await getProfileById(user.id);
     createUserSession(request, profile);
+    logger.info('auth.login.success', {
+      ...requestLogContext(request),
+      profileId: profile.id,
+      email: profile.email,
+      role: profile.role,
+    });
     response.json({profile});
   } catch (error) {
     next(error);
@@ -198,12 +271,21 @@ app.post('/api/auth/login', async (request, response, next) => {
 });
 
 app.post('/api/auth/logout', (request, response, next) => {
+  const logContext = {
+    ...requestLogContext(request),
+  };
+
   request.session.destroy((error) => {
     if (error) {
+      logger.error('auth.logout.failed', {
+        ...logContext,
+        error: logger.serializeError(error),
+      });
       next(error);
       return;
     }
 
+    logger.info('auth.logout.success', logContext);
     response.json({ok: true});
   });
 });
@@ -260,6 +342,11 @@ app.patch(
         });
 
         createUserSession(request, profile);
+        logger.info('profile.updated', {
+          ...requestLogContext(request),
+          profileId: profile.id,
+          email: profile.email,
+        });
         response.json({profile});
       } catch (error) {
         next(error);
@@ -335,6 +422,14 @@ app.post('/api/rides', requireAuth, async (request, response, next) => {
       notes,
     });
 
+    logger.info('ride.created', {
+      ...requestLogContext(request),
+      rideId: ride.id,
+      driverId: ride.driverId,
+      startPoint: ride.startPoint,
+      endPoint: ride.endPoint,
+      seatsTotal: ride.seatsTotal,
+    });
     response.status(201).json({ride});
   } catch (error) {
     next(error);
@@ -366,6 +461,13 @@ app.post(
           message,
         });
 
+        logger.info('seat_request.created', {
+          ...requestLogContext(request),
+          rideId: request.params.rideId,
+          requestId: result.request.id,
+          passengerId: request.currentUser.id,
+          driverId: ride.driverId,
+        });
         response.status(201).json(result);
       } catch (error) {
         next(error);
@@ -391,6 +493,13 @@ app.patch(
           decision,
         });
 
+        logger.info('seat_request.updated', {
+          ...requestLogContext(request),
+          requestId: request.params.requestId,
+          actorId: request.currentUser.id,
+          decision,
+          rideId: result.ride.id,
+        });
         response.json(result);
       } catch (error) {
         next(error);
@@ -410,19 +519,34 @@ app.post(
           text,
         });
 
+        logger.info('ride.message.created', {
+          ...requestLogContext(request),
+          rideId: request.params.rideId,
+          senderId: request.currentUser.id,
+          messageId: result.message.id,
+        });
         response.status(201).json(result);
       } catch (error) {
         next(error);
       }
     });
 
-app.use((error, _request, response, _next) => {
+app.use((error, request, response, _next) => {
   const status = error.status || 500;
+  logger[status >= 500 ? 'error' : 'warn']('http.request.failed', {
+    ...requestLogContext(request),
+    status,
+    error: logger.serializeError(error),
+  });
   response.status(status).json({
     error: error.message || 'Unexpected server error.',
   });
 });
 
 app.listen(PORT, () => {
-  console.log(`RidesApp listening on http://localhost:${PORT}`);
+  logger.info('app.started', {
+    port: Number(PORT),
+    nodeEnv: process.env.NODE_ENV || 'development',
+    logLevel: logger.activeLevel,
+  });
 });
