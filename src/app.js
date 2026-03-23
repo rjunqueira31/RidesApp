@@ -1,12 +1,24 @@
 require('dotenv').config();
 
-const {randomUUID} = require('crypto');
 const bcrypt = require('bcryptjs');
 const express = require('express');
 const session = require('express-session');
-const pgSession = require('connect-pg-simple')(session);
 const path = require('path');
+const {
+  applySecurityMiddleware,
+  createSessionMiddleware,
+  isProduction,
+} = require('./config/security');
 const logger = require('./logger');
+const {createErrorHandler} = require('./middleware/errorHandler');
+const {
+  authRateLimit,
+  ridePublishRateLimit,
+} = require('./middleware/rateLimit');
+const {
+  requestLogContext,
+  requestLoggingMiddleware,
+} = require('./middleware/requestLogging');
 const {
   createMessage,
   createProfile,
@@ -24,60 +36,13 @@ const {
 const app = express();
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
+applySecurityMiddleware(app);
 
-function requestLogContext(request) {
-  return {
-    requestId: request.requestId,
-    method: request.method,
-    path: request.path,
-    userId: request.currentUser?.id || request.session?.userId || null,
-    userRole: request.currentUser?.role || request.session?.userRole || null,
-    ip: request.ip,
-  };
-}
-
-app.use(session({
-  store: new pgSession({
-    conString: process.env.DATABASE_URL,
-    createTableIfMissing: true,
-  }),
-  secret: process.env.SESSION_SECRET,
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: false,
-    maxAge: 1000 * 60 * 60 * 24 * 7,
-  },
-}));
+app.use(createSessionMiddleware(session));
 
 app.use(express.json());
 
-app.use((request, response, next) => {
-  request.requestId = randomUUID();
-  const startedAt = process.hrtime.bigint();
-
-  response.on('finish', () => {
-    const durationMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
-    const level = response.statusCode >= 500 ? 'error' :
-        response.statusCode >= 400           ? 'warn' :
-                                               'info';
-
-    logger[level]('http.request.completed', {
-      requestId: request.requestId,
-      method: request.method,
-      path: request.originalUrl,
-      statusCode: response.statusCode,
-      durationMs: Number(durationMs.toFixed(1)),
-      userId: request.currentUser?.id || request.session?.userId || null,
-      userRole: request.currentUser?.role || request.session?.userRole || null,
-      ip: request.ip,
-    });
-  });
-
-  next();
-});
+app.use(requestLoggingMiddleware);
 
 function assertRequired(value, label) {
   if (!String(value || '').trim()) {
@@ -177,7 +142,7 @@ app.get('/api/auth/me', requireAuth, async (request, response) => {
   response.json({profile: request.currentUser});
 });
 
-app.post('/api/auth/signup', async (request, response, next) => {
+app.post('/api/auth/signup', authRateLimit, async (request, response, next) => {
   try {
     const {
       name,
@@ -223,7 +188,7 @@ app.post('/api/auth/signup', async (request, response, next) => {
   }
 });
 
-app.post('/api/auth/login', async (request, response, next) => {
+app.post('/api/auth/login', authRateLimit, async (request, response, next) => {
   try {
     const {email, password} = request.body;
 
@@ -384,57 +349,59 @@ app.get('/api/rides/:rideId', requireAuth, async (request, response, next) => {
   }
 });
 
-app.post('/api/rides', requireAuth, async (request, response, next) => {
-  try {
-    const {
-      startPoint,
-      endPoint,
-      startWindowStart,
-      startWindowEnd,
-      seatsTotal,
-      car,
-      notes,
-    } = request.body;
+app.post(
+    '/api/rides', requireAuth, ridePublishRateLimit,
+    async (request, response, next) => {
+      try {
+        const {
+          startPoint,
+          endPoint,
+          startWindowStart,
+          startWindowEnd,
+          seatsTotal,
+          car,
+          notes,
+        } = request.body;
 
-    assertRequired(startPoint, 'Start point');
-    assertRequired(endPoint, 'End point');
-    assertRequired(startWindowStart, 'Earliest departure');
-    assertRequired(startWindowEnd, 'Latest departure');
-    assertRequired(car, 'Car');
+        assertRequired(startPoint, 'Start point');
+        assertRequired(endPoint, 'End point');
+        assertRequired(startWindowStart, 'Earliest departure');
+        assertRequired(startWindowEnd, 'Latest departure');
+        assertRequired(car, 'Car');
 
-    validateRideWindow(startWindowStart, startWindowEnd);
+        validateRideWindow(startWindowStart, startWindowEnd);
 
-    const seatCount = Number(seatsTotal);
-    if (Number.isNaN(seatCount) || seatCount < 1) {
-      const error = new Error('Seats must be at least 1.');
-      error.status = 400;
-      throw error;
-    }
+        const seatCount = Number(seatsTotal);
+        if (Number.isNaN(seatCount) || seatCount < 1) {
+          const error = new Error('Seats must be at least 1.');
+          error.status = 400;
+          throw error;
+        }
 
-    const ride = await createRide({
-      driverId: request.currentUser.id,
-      startPoint,
-      endPoint,
-      startWindowStart,
-      startWindowEnd,
-      seatsTotal: seatCount,
-      car,
-      notes,
+        const ride = await createRide({
+          driverId: request.currentUser.id,
+          startPoint,
+          endPoint,
+          startWindowStart,
+          startWindowEnd,
+          seatsTotal: seatCount,
+          car,
+          notes,
+        });
+
+        logger.info('ride.created', {
+          ...requestLogContext(request),
+          rideId: ride.id,
+          driverId: ride.driverId,
+          startPoint: ride.startPoint,
+          endPoint: ride.endPoint,
+          seatsTotal: ride.seatsTotal,
+        });
+        response.status(201).json({ride});
+      } catch (error) {
+        next(error);
+      }
     });
-
-    logger.info('ride.created', {
-      ...requestLogContext(request),
-      rideId: ride.id,
-      driverId: ride.driverId,
-      startPoint: ride.startPoint,
-      endPoint: ride.endPoint,
-      seatsTotal: ride.seatsTotal,
-    });
-    response.status(201).json({ride});
-  } catch (error) {
-    next(error);
-  }
-});
 
 app.post(
     '/api/rides/:rideId/requests', requireAuth,
@@ -531,17 +498,7 @@ app.post(
       }
     });
 
-app.use((error, request, response, _next) => {
-  const status = error.status || 500;
-  logger[status >= 500 ? 'error' : 'warn']('http.request.failed', {
-    ...requestLogContext(request),
-    status,
-    error: logger.serializeError(error),
-  });
-  response.status(status).json({
-    error: error.message || 'Unexpected server error.',
-  });
-});
+app.use(createErrorHandler({isProduction: isProduction()}));
 
 app.listen(PORT, () => {
   logger.info('app.started', {

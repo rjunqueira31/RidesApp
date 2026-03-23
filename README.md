@@ -35,7 +35,7 @@ Internal ride sharing MVP for Critical TechWorks.
 	- `\q`
 3. Configure your environment:
 	- copy `.env.example` to `.env` if needed
-	- verify `DATABASE_URL`, `SESSION_SECRET`, `MANAGER_EMAILS`, and `LOG_LEVEL`
+	- verify `NODE_ENV`, `DATABASE_URL`, `SESSION_SECRET`, `MANAGER_EMAILS`, and `LOG_LEVEL`
 4. Make sure PostgreSQL is running.
 5. Apply the database schema:
 	- `npx prisma migrate dev`
@@ -68,3 +68,10 @@ Internal ride sharing MVP for Critical TechWorks.
 - Local testing: run `npm start` or `npm run dev` and inspect the terminal output.
 - Deployed environments: inspect the runtime logs from your hosting provider or process manager.
 - Logged events include request completion, request failures, signup/login outcomes, profile updates, ride creation, seat request changes, and ride chat activity.
+
+## Production hardening
+
+- `helmet` is enabled for safer default HTTP headers.
+- Login and signup are rate limited, and ride publishing has a separate rate limit.
+- In production, Express trusts one proxy hop and session cookies are marked `secure`.
+- In production, 500 responses return a generic error message instead of surfacing internal server details.
