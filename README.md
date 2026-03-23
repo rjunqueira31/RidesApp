@@ -16,7 +16,7 @@ Internal ride sharing MVP for Critical TechWorks.
 - Profile creation with email and password support
 - Public landing page with separate login and signup pages
 - Signed-in dashboard with navigation tiles for create ride, search rides, and my rides
-- Profile editing for name, email, phone, department, and default car
+- Profile editing for name, email, phone, default car, office, and home
 - Driver ride publishing with route, time window, car, and available seats
 - Ride search with filters for driver, start point, end point, and open seats
 - Seat requests for passengers
@@ -35,7 +35,7 @@ Internal ride sharing MVP for Critical TechWorks.
 	- `\q`
 3. Configure your environment:
 	- copy `.env.example` to `.env` if needed
-	- verify `DATABASE_URL`, `SESSION_SECRET`, and `MANAGER_EMAILS`
+	- verify `NODE_ENV`, `DATABASE_URL`, `SESSION_SECRET`, `MANAGER_EMAILS`, and `LOG_LEVEL`
 4. Make sure PostgreSQL is running.
 5. Apply the database schema:
 	- `npx prisma migrate dev`
@@ -57,7 +57,21 @@ Internal ride sharing MVP for Critical TechWorks.
 ## Notes
 
 - Authentication uses server-side sessions.
-- Company-domain email validation is temporarily disabled in [src/app.js](src/app.js) and can be re-enabled later.
 - Authentication state is checked through `/api/auth/me` and cleared through `/api/auth/logout`.
 - Old rides are cleaned up in the database layer instead of mutating a JSON file.
 - The default local database setup expects the `ridesapp` PostgreSQL user, password, and database names shown above.
+
+## Logging
+
+- The server writes structured JSON logs to stdout and stderr.
+- Set `LOG_LEVEL` in `.env` to `error`, `warn`, `info`, or `debug`.
+- Local testing: run `npm start` or `npm run dev` and inspect the terminal output.
+- Deployed environments: inspect the runtime logs from your hosting provider or process manager.
+- Logged events include request completion, request failures, signup/login outcomes, profile updates, ride creation, seat request changes, and ride chat activity.
+
+## Production hardening
+
+- `helmet` is enabled for safer default HTTP headers.
+- Login and signup are rate limited, and ride publishing has a separate rate limit.
+- In production, Express trusts one proxy hop and session cookies are marked `secure`.
+- In production, 500 responses return a generic error message instead of surfacing internal server details.

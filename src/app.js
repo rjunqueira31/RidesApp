@@ -3,8 +3,22 @@ require('dotenv').config();
 const bcrypt = require('bcryptjs');
 const express = require('express');
 const session = require('express-session');
-const pgSession = require('connect-pg-simple')(session);
 const path = require('path');
+const {
+  applySecurityMiddleware,
+  createSessionMiddleware,
+  isProduction,
+} = require('./config/security');
+const logger = require('./logger');
+const {createErrorHandler} = require('./middleware/errorHandler');
+const {
+  authRateLimit,
+  ridePublishRateLimit,
+} = require('./middleware/rateLimit');
+const {
+  requestLogContext,
+  requestLoggingMiddleware,
+} = require('./middleware/requestLogging');
 const {
   createMessage,
   createProfile,
@@ -22,24 +36,13 @@ const {
 const app = express();
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
+applySecurityMiddleware(app);
 
-app.use(session({
-  store: new pgSession({
-    conString: process.env.DATABASE_URL,
-    createTableIfMissing: true,
-  }),
-  secret: process.env.SESSION_SECRET,
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: false,
-    maxAge: 1000 * 60 * 60 * 24 * 7,
-  },
-}));
+app.use(createSessionMiddleware(session));
 
 app.use(express.json());
+
+app.use(requestLoggingMiddleware);
 
 function assertRequired(value, label) {
   if (!String(value || '').trim()) {
@@ -83,6 +86,9 @@ function validateRideWindow(startWindowStart, startWindowEnd) {
 async function requireAuth(request, response, next) {
   try {
     if (!request.session.userId) {
+      logger.warn('auth.required', {
+        ...requestLogContext(request),
+      });
       response.status(401).json({error: 'Authentication required.'});
       return;
     }
@@ -90,6 +96,9 @@ async function requireAuth(request, response, next) {
     const profile = await getProfileById(request.session.userId);
 
     if (!profile) {
+      logger.warn('auth.session_user_missing', {
+        ...requestLogContext(request),
+      });
       request.session.destroy(() => undefined);
       response.status(401).json({error: 'Authentication required.'});
       return;
@@ -104,6 +113,9 @@ async function requireAuth(request, response, next) {
 
 function requireManager(request, response, next) {
   if (!request.currentUser || request.currentUser.role !== 'MANAGER_USER') {
+    logger.warn('auth.manager_required', {
+      ...requestLogContext(request),
+    });
     response.status(403).json({error: 'Forbidden'});
     return;
   }
@@ -130,7 +142,7 @@ app.get('/api/auth/me', requireAuth, async (request, response) => {
   response.json({profile: request.currentUser});
 });
 
-app.post('/api/auth/signup', async (request, response, next) => {
+app.post('/api/auth/signup', authRateLimit, async (request, response, next) => {
   try {
     const {
       name,
@@ -159,13 +171,24 @@ app.post('/api/auth/signup', async (request, response, next) => {
     });
 
     createUserSession(request, profile);
+    logger.info('auth.signup.success', {
+      ...requestLogContext(request),
+      profileId: profile.id,
+      email: profile.email,
+      role: profile.role,
+    });
     response.status(201).json({profile});
   } catch (error) {
+    logger.warn('auth.signup.failed', {
+      ...requestLogContext(request),
+      email: request.body?.email,
+      error: logger.serializeError(error),
+    });
     next(error);
   }
 });
 
-app.post('/api/auth/login', async (request, response, next) => {
+app.post('/api/auth/login', authRateLimit, async (request, response, next) => {
   try {
     const {email, password} = request.body;
 
@@ -175,6 +198,10 @@ app.post('/api/auth/login', async (request, response, next) => {
     const user = await getAuthUserByEmail(email);
 
     if (!user) {
+      logger.warn('auth.login.failed_unknown_email', {
+        ...requestLogContext(request),
+        email,
+      });
       const error = new Error('Invalid email or password.');
       error.status = 401;
       throw error;
@@ -184,6 +211,11 @@ app.post('/api/auth/login', async (request, response, next) => {
         await bcrypt.compare(String(password), user.passwordHash);
 
     if (!isValidPassword) {
+      logger.warn('auth.login.failed_bad_password', {
+        ...requestLogContext(request),
+        email,
+        profileId: user.id,
+      });
       const error = new Error('Invalid email or password.');
       error.status = 401;
       throw error;
@@ -191,6 +223,12 @@ app.post('/api/auth/login', async (request, response, next) => {
 
     const profile = await getProfileById(user.id);
     createUserSession(request, profile);
+    logger.info('auth.login.success', {
+      ...requestLogContext(request),
+      profileId: profile.id,
+      email: profile.email,
+      role: profile.role,
+    });
     response.json({profile});
   } catch (error) {
     next(error);
@@ -198,12 +236,21 @@ app.post('/api/auth/login', async (request, response, next) => {
 });
 
 app.post('/api/auth/logout', (request, response, next) => {
+  const logContext = {
+    ...requestLogContext(request),
+  };
+
   request.session.destroy((error) => {
     if (error) {
+      logger.error('auth.logout.failed', {
+        ...logContext,
+        error: logger.serializeError(error),
+      });
       next(error);
       return;
     }
 
+    logger.info('auth.logout.success', logContext);
     response.json({ok: true});
   });
 });
@@ -260,6 +307,11 @@ app.patch(
         });
 
         createUserSession(request, profile);
+        logger.info('profile.updated', {
+          ...requestLogContext(request),
+          profileId: profile.id,
+          email: profile.email,
+        });
         response.json({profile});
       } catch (error) {
         next(error);
@@ -297,49 +349,59 @@ app.get('/api/rides/:rideId', requireAuth, async (request, response, next) => {
   }
 });
 
-app.post('/api/rides', requireAuth, async (request, response, next) => {
-  try {
-    const {
-      startPoint,
-      endPoint,
-      startWindowStart,
-      startWindowEnd,
-      seatsTotal,
-      car,
-      notes,
-    } = request.body;
+app.post(
+    '/api/rides', requireAuth, ridePublishRateLimit,
+    async (request, response, next) => {
+      try {
+        const {
+          startPoint,
+          endPoint,
+          startWindowStart,
+          startWindowEnd,
+          seatsTotal,
+          car,
+          notes,
+        } = request.body;
 
-    assertRequired(startPoint, 'Start point');
-    assertRequired(endPoint, 'End point');
-    assertRequired(startWindowStart, 'Earliest departure');
-    assertRequired(startWindowEnd, 'Latest departure');
-    assertRequired(car, 'Car');
+        assertRequired(startPoint, 'Start point');
+        assertRequired(endPoint, 'End point');
+        assertRequired(startWindowStart, 'Earliest departure');
+        assertRequired(startWindowEnd, 'Latest departure');
+        assertRequired(car, 'Car');
 
-    validateRideWindow(startWindowStart, startWindowEnd);
+        validateRideWindow(startWindowStart, startWindowEnd);
 
-    const seatCount = Number(seatsTotal);
-    if (Number.isNaN(seatCount) || seatCount < 1) {
-      const error = new Error('Seats must be at least 1.');
-      error.status = 400;
-      throw error;
-    }
+        const seatCount = Number(seatsTotal);
+        if (Number.isNaN(seatCount) || seatCount < 1) {
+          const error = new Error('Seats must be at least 1.');
+          error.status = 400;
+          throw error;
+        }
 
-    const ride = await createRide({
-      driverId: request.currentUser.id,
-      startPoint,
-      endPoint,
-      startWindowStart,
-      startWindowEnd,
-      seatsTotal: seatCount,
-      car,
-      notes,
+        const ride = await createRide({
+          driverId: request.currentUser.id,
+          startPoint,
+          endPoint,
+          startWindowStart,
+          startWindowEnd,
+          seatsTotal: seatCount,
+          car,
+          notes,
+        });
+
+        logger.info('ride.created', {
+          ...requestLogContext(request),
+          rideId: ride.id,
+          driverId: ride.driverId,
+          startPoint: ride.startPoint,
+          endPoint: ride.endPoint,
+          seatsTotal: ride.seatsTotal,
+        });
+        response.status(201).json({ride});
+      } catch (error) {
+        next(error);
+      }
     });
-
-    response.status(201).json({ride});
-  } catch (error) {
-    next(error);
-  }
-});
 
 app.post(
     '/api/rides/:rideId/requests', requireAuth,
@@ -366,6 +428,13 @@ app.post(
           message,
         });
 
+        logger.info('seat_request.created', {
+          ...requestLogContext(request),
+          rideId: request.params.rideId,
+          requestId: result.request.id,
+          passengerId: request.currentUser.id,
+          driverId: ride.driverId,
+        });
         response.status(201).json(result);
       } catch (error) {
         next(error);
@@ -391,6 +460,13 @@ app.patch(
           decision,
         });
 
+        logger.info('seat_request.updated', {
+          ...requestLogContext(request),
+          requestId: request.params.requestId,
+          actorId: request.currentUser.id,
+          decision,
+          rideId: result.ride.id,
+        });
         response.json(result);
       } catch (error) {
         next(error);
@@ -410,19 +486,24 @@ app.post(
           text,
         });
 
+        logger.info('ride.message.created', {
+          ...requestLogContext(request),
+          rideId: request.params.rideId,
+          senderId: request.currentUser.id,
+          messageId: result.message.id,
+        });
         response.status(201).json(result);
       } catch (error) {
         next(error);
       }
     });
 
-app.use((error, _request, response, _next) => {
-  const status = error.status || 500;
-  response.status(status).json({
-    error: error.message || 'Unexpected server error.',
-  });
-});
+app.use(createErrorHandler({isProduction: isProduction()}));
 
 app.listen(PORT, () => {
-  console.log(`RidesApp listening on http://localhost:${PORT}`);
+  logger.info('app.started', {
+    port: Number(PORT),
+    nodeEnv: process.env.NODE_ENV || 'development',
+    logLevel: logger.activeLevel,
+  });
 });
