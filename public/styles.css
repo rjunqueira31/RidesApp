@@ -120,6 +120,10 @@ button:disabled {
   letter-spacing: -0.04em;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 .marketing-actions,
 .topbar-user,
 .hero-actions,

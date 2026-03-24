@@ -13,10 +13,16 @@
     <div class="shell shell-wide">
       <header class="marketing-topbar">
         <a href="index.html" class="brand-link">CTW Rides</a>
-        <nav class="marketing-actions">
+        <nav id="landing-guest-actions" class="marketing-actions">
           <a href="login.html" class="ghost-link">Login</a>
           <a href="signup.html" class="button-link">Signup</a>
         </nav>
+        <div id="landing-auth-actions" class="topbar-user" hidden>
+          <span id="current-user-pill" class="user-pill"></span>
+          <a href="dashboard.html" class="nav-link">Dashboard</a>
+          <a href="profile.html" class="nav-link">Profile</a>
+          <button type="button" id="logout-button" class="button-secondary">Logout</button>
+        </div>
       </header>
 
       <main class="marketing-hero">
@@ -27,10 +33,6 @@
             CTW Rides helps teammates publish available seats, request rides, manage passengers,
             and chat about pickup details in one place.
           </p>
-          <div class="hero-actions">
-            <a href="signup.html" class="button-link">Signup</a>
-            <a href="login.html" class="ghost-link">Login</a>
-          </div>
           <div class="feature-chips">
             <span class="chip">Create rides</span>
             <span class="chip">Search seats</span>

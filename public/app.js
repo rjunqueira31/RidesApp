@@ -286,16 +286,16 @@ function ensureRideCreatedModal() {
 
   document.body.insertAdjacentHTML('beforeend', `
     <div id="ride-created-modal" class="notes-modal" hidden>
-      <div class="notes-modal-backdrop" data-close-ride-created-modal="true"></div>
+      <div class="notes-modal-backdrop" data-dismiss-ride-created-modal="true"></div>
       <div class="notes-modal-panel ride-created-modal-panel" role="dialog" aria-modal="true" aria-labelledby="ride-created-modal-title">
         <div class="notes-modal-header">
           <h2 id="ride-created-modal-title">Ride published</h2>
-          <button type="button" class="button-secondary notes-modal-close" data-close-ride-created-modal="true" aria-label="Close confirmation">Close</button>
+          <button type="button" class="button-secondary notes-modal-close" data-go-to-landing-after-ride="true" aria-label="Close confirmation">Close</button>
         </div>
         <p class="ride-created-copy">Your ride is now visible to colleagues.</p>
         <div id="ride-created-summary" class="ride-created-summary"></div>
         <div class="ride-created-actions">
-          <button type="button" class="button-secondary" data-close-ride-created-modal="true">Create another</button>
+          <button type="button" class="button-secondary" data-dismiss-ride-created-modal="true">Create another</button>
           <button type="button" id="ride-created-view-my-rides">See my rides</button>
         </div>
       </div>
@@ -304,8 +304,14 @@ function ensureRideCreatedModal() {
 
   modal = document.querySelector('#ride-created-modal');
   modal.addEventListener('click', (event) => {
-    if (event.target.closest('[data-close-ride-created-modal="true"]')) {
+    if (event.target.closest('[data-go-to-landing-after-ride="true"]')) {
+      redirectTo('index.html');
+      return;
+    }
+
+    if (event.target.closest('[data-dismiss-ride-created-modal="true"]')) {
       modal.hidden = true;
+      return;
     }
 
     if (event.target.closest('#ride-created-view-my-rides')) {
@@ -392,6 +398,25 @@ function wireLogout() {
       redirectTo('index.html');
     }
   });
+}
+
+function syncLandingPageAuthState() {
+  const guestHeaderActions = document.querySelector('#landing-guest-actions');
+  const authHeaderActions = document.querySelector('#landing-auth-actions');
+  const isAuthenticated = Boolean(state.currentUser);
+
+  if (guestHeaderActions) {
+    guestHeaderActions.hidden = isAuthenticated;
+  }
+
+  if (authHeaderActions) {
+    authHeaderActions.hidden = !isAuthenticated;
+  }
+
+  if (isAuthenticated) {
+    hydrateUserPill();
+    wireLogout();
+  }
 }
 
 async function loadProfiles() {
@@ -702,7 +727,7 @@ function ensureAuthenticated() {
 
 function ensureManager() {
   if (!userIsManager()) {
-    redirectTo('dashboard.html');
+    redirectTo('index.html');
     return false;
   }
 
@@ -710,15 +735,18 @@ function ensureManager() {
 }
 
 async function setupLandingPage() {
-  if (state.currentUser) {
-    redirectTo('dashboard.html');
+  syncLandingPageAuthState();
+
+  const pendingToast = consumePendingToast();
+  if (pendingToast?.message) {
+    showToast(pendingToast.message, pendingToast.tone);
   }
 }
 
 async function setupSignupPage() {
   await loadCurrentUser();
   if (state.currentUser) {
-    redirectTo('dashboard.html');
+    redirectTo('index.html');
     return;
   }
 
@@ -741,7 +769,7 @@ async function setupSignupPage() {
           });
 
           state.currentUser = payload.profile;
-          redirectTo('dashboard.html');
+          redirectTo('index.html');
         } catch (error) {
           setFeedback(error.message, true);
         }
@@ -751,7 +779,7 @@ async function setupSignupPage() {
 async function setupLoginPage() {
   await loadCurrentUser();
   if (state.currentUser) {
-    redirectTo('dashboard.html');
+    redirectTo('index.html');
     return;
   }
 
@@ -771,7 +799,7 @@ async function setupLoginPage() {
           });
 
           state.currentUser = payload.profile;
-          redirectTo('dashboard.html');
+          redirectTo('index.html');
         } catch (error) {
           setFeedback(error.message, true);
         }
@@ -1233,7 +1261,7 @@ async function setupProfilePage() {
       state.currentUser = payload.profile;
       hydrateUserPill();
       setPendingToast('Profile updated successfully.');
-      redirectTo('dashboard.html');
+      redirectTo('index.html');
     } catch (error) {
       setFeedback(error.message, true);
     }
