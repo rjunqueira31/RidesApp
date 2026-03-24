@@ -21,6 +21,8 @@ const OFFICE_LOCATION_LABELS = {
   BRAGA: 'Braga',
 };
 
+const PENDING_TOAST_KEY = 'ridesapp.pendingToast';
+
 function userIsManager() {
   return state.currentUser?.role === 'MANAGER_USER';
 }
@@ -61,6 +63,59 @@ function setFeedback(message, isError = false) {
 
   feedback.textContent = message;
   feedback.style.color = isError ? '#b42318' : '#09005d';
+}
+
+function setPendingToast(message, tone = 'success') {
+  sessionStorage.setItem(PENDING_TOAST_KEY, JSON.stringify({message, tone}));
+}
+
+function consumePendingToast() {
+  const rawToast = sessionStorage.getItem(PENDING_TOAST_KEY);
+  if (!rawToast) {
+    return null;
+  }
+
+  sessionStorage.removeItem(PENDING_TOAST_KEY);
+
+  try {
+    return JSON.parse(rawToast);
+  } catch {
+    return null;
+  }
+}
+
+function ensureToastContainer() {
+  let container = document.querySelector('#toast-container');
+  if (container) {
+    return container;
+  }
+
+  document.body.insertAdjacentHTML(
+      'beforeend', '<div id="toast-container" class="toast-container"></div>');
+  container = document.querySelector('#toast-container');
+  return container;
+}
+
+function showToast(message, tone = 'success') {
+  const container = ensureToastContainer();
+  const toast = document.createElement('div');
+
+  toast.className = `toast toast-${tone}`;
+  toast.textContent = message;
+  container.appendChild(toast);
+
+  requestAnimationFrame(() => {
+    toast.classList.add('toast-visible');
+  });
+
+  window.setTimeout(() => {
+    toast.classList.remove('toast-visible');
+    toast.classList.add('toast-hiding');
+
+    window.setTimeout(() => {
+      toast.remove();
+    }, 280);
+  }, 2000);
 }
 
 async function loadCurrentUser() {
@@ -562,7 +617,7 @@ async function handleRideActions(container, refresh) {
 
     if (event.target.classList.contains('refresh-rides')) {
       await refresh();
-      setFeedback('Ride list refreshed.');
+      showToast('Ride list refreshed.');
     }
 
     if (event.target.classList.contains('manage-request')) {
@@ -574,9 +629,9 @@ async function handleRideActions(container, refresh) {
           }),
         });
         await refresh();
-        setFeedback(`Request ${event.target.dataset.decision}.`);
+        showToast(`Request ${event.target.dataset.decision}.`);
       } catch (error) {
-        setFeedback(error.message, true);
+        showToast(error.message, 'error');
       }
     }
   });
@@ -597,9 +652,9 @@ async function handleRideActions(container, refresh) {
           }),
         });
         await refresh();
-        setFeedback('Seat request sent.');
+        showToast('Seat request sent.');
       } catch (error) {
-        setFeedback(error.message, true);
+        showToast(error.message, 'error');
       }
       return;
     }
@@ -615,7 +670,7 @@ async function handleRideActions(container, refresh) {
     const text = String(formData.get('text') || '').trim();
 
     if (!text) {
-      setFeedback('Write a message before sending.', true);
+      showToast('Write a message before sending.', 'error');
       return;
     }
 
@@ -627,9 +682,9 @@ async function handleRideActions(container, refresh) {
         }),
       });
       await refresh();
-      setFeedback('Message sent.');
+      showToast('Message sent.');
     } catch (error) {
-      setFeedback(error.message, true);
+      showToast(error.message, 'error');
     }
   });
 }
@@ -727,6 +782,11 @@ async function setupDashboardPage() {
   const hubGrid = document.querySelector('.hub-grid');
   document.querySelector('#dashboard-title').textContent =
       `Welcome, ${state.currentUser.name}`;
+
+  const pendingToast = consumePendingToast();
+  if (pendingToast?.message) {
+    showToast(pendingToast.message, pendingToast.tone);
+  }
 
   if (hubGrid && userIsManager()) {
     hubGrid.insertAdjacentHTML('beforeend', `
@@ -1172,7 +1232,8 @@ async function setupProfilePage() {
 
       state.currentUser = payload.profile;
       hydrateUserPill();
-      setFeedback('Profile updated successfully.');
+      setPendingToast('Profile updated successfully.');
+      redirectTo('dashboard.html');
     } catch (error) {
       setFeedback(error.message, true);
     }
