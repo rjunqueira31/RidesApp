@@ -3,3 +3,5 @@ node_modules
 data/db.local.json
 
 /src/generated/prisma
+
+kanban
