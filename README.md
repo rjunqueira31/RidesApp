@@ -44,6 +44,47 @@ Internal ride sharing MVP for Critical TechWorks.
 7. Open:
 	- `http://localhost:3000`
 
+## Deploy on Railway
+
+This app already fits Railway's Node deployment model:
+
+- the server reads `PORT` from the environment
+- Prisma uses `DATABASE_URL`
+- logs go to stdout/stderr
+- production cookies are enabled when `NODE_ENV=production`
+
+Recommended setup:
+
+1. Keep Neon as the database.
+	- Use your existing Neon PostgreSQL database instead of creating a new Railway database.
+2. Push the latest code to GitHub.
+3. In Railway, create a new project and choose `Deploy from GitHub repo`.
+4. Select this repository.
+5. In the Railway service variables, set:
+	- `NODE_ENV=production`
+	- `DATABASE_URL=<your Neon connection string>`
+	- `SESSION_SECRET=<a long random secret>`
+	- `MANAGER_EMAILS=<comma-separated manager emails>`
+	- `LOG_LEVEL=info`
+6. Railway should detect the app automatically.
+	- Install command: `npm install`
+	- Start command: `npm start`
+7. Before first production use, run migrations in Railway:
+	- `npm run db:migrate:deploy`
+8. Open the generated Railway domain and verify:
+	- login/signup work
+	- session persistence works after refresh
+	- profile edits save
+	- ride creation/search/chat still work
+9. After verification, point your custom domain to Railway if needed.
+
+Notes:
+
+- The `postinstall` script runs `prisma generate`, so the Prisma client is regenerated during deployment.
+- This app stores Express sessions in PostgreSQL using `connect-pg-simple`, so `DATABASE_URL` must be valid both for Prisma and the session store.
+- Because cookies are marked `secure` in production, always test over the Railway HTTPS URL, not plain HTTP.
+- If Render is still live, keep it running until you confirm Railway is healthy, then switch DNS and shut Render down.
+
 ## Main files
 
 - [src/app.js](src/app.js) — Express server and API routes

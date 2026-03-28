@@ -4,8 +4,10 @@
   "description": "CTW ride sharing MVP",
   "main": "src/app.js",
   "scripts": {
+    "postinstall": "prisma generate",
     "start": "node src/app.js",
-    "dev": "nodemon src/app.js"
+    "dev": "nodemon src/app.js",
+    "db:migrate:deploy": "prisma migrate deploy"
   },
   "keywords": [
     "rideshare",
