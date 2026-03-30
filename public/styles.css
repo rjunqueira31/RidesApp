@@ -293,14 +293,6 @@ button:disabled {
   margin: 0;
 }
 
-.mini-label {
-  margin: 0 0 0.35rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-size: 0.75rem;
-  color: var(--muted);
-}
-
 .mini-badge {
   background: var(--accent-soft);
   color: var(--accent-dark);

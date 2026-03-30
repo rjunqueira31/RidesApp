@@ -344,6 +344,7 @@ function ensureRideCreatedModal() {
 function openRideCreatedModal(ride) {
   const modal = ensureRideCreatedModal();
   const summary = modal.querySelector('#ride-created-summary');
+  const carLabel = String(ride.car || '').trim() || 'No car specified';
 
   summary.innerHTML = `
     <div class="ride-created-route">${escapeHtml(ride.startPoint)} to ${
@@ -351,7 +352,7 @@ function openRideCreatedModal(ride) {
     <div class="ride-created-meta">${
       escapeHtml(formatDateTime(ride.startWindowStart))} to ${
       escapeHtml(formatDateTime(ride.startWindowEnd))}</div>
-    <div class="ride-created-meta">${escapeHtml(ride.car)} · ${
+    <div class="ride-created-meta">${escapeHtml(carLabel)} · ${
       escapeHtml(ride.seatsTotal)} seat${
       Number(ride.seatsTotal) === 1 ? '' : 's'}</div>
   `;
@@ -627,7 +628,7 @@ function renderRideCard(ride, options = {}) {
         </div>
         <div>
           <strong>Car</strong>
-          <div class="meta">${escapeHtml(ride.car)}</div>
+          <div class="meta">${escapeHtml(ride.car || '—')}</div>
         </div>
         <div>
           <strong>Seats left</strong>
@@ -1133,8 +1134,7 @@ async function setupSearchRidesPage() {
     searchForm.reset();
     lastRequestedFilterKey = '';
     await runSearch(
-        {driver: '', start: '', end: '', openOnly: false},
-        {force: true});
+        {driver: '', start: '', end: '', openOnly: false}, {force: true});
   });
 }
 

@@ -365,7 +365,6 @@ app.post(
         assertRequired(endPoint, 'End point');
         assertRequired(startWindowStart, 'Earliest departure');
         assertRequired(startWindowEnd, 'Latest departure');
-        assertRequired(car, 'Car');
 
         validateRideWindow(startWindowStart, startWindowEnd);
 
