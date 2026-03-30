@@ -64,10 +64,16 @@ function parseDateTime(value, label) {
   return parsed;
 }
 
+function floorToMinute(date) {
+  const normalized = new Date(date);
+  normalized.setSeconds(0, 0);
+  return normalized;
+}
+
 function validateRideWindow(startWindowStart, startWindowEnd) {
   const start = parseDateTime(startWindowStart, 'Earliest departure');
   const end = parseDateTime(startWindowEnd, 'Latest departure');
-  const now = new Date();
+  const now = floorToMinute(new Date());
 
   if (start.getTime() < now.getTime()) {
     const error = new Error('Earliest departure must be in the future.');

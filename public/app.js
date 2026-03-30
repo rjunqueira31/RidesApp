@@ -176,14 +176,17 @@ function combineDateAndTime(dateValue, timeValue) {
   return `${dateValue}T${timeValue}`;
 }
 
-function roundUpToQuarterHour(date) {
-  const rounded = new Date(date);
-  rounded.setSeconds(0, 0);
-  const minutes = rounded.getMinutes();
-  const remainder = minutes % 15;
+function floorToMinute(date) {
+  const normalized = new Date(date);
+  normalized.setSeconds(0, 0);
+  return normalized;
+}
 
-  if (remainder !== 0) {
-    rounded.setMinutes(minutes + (15 - remainder));
+function roundUpToNextMinute(date) {
+  const rounded = floorToMinute(date);
+
+  if (date.getSeconds() !== 0 || date.getMilliseconds() !== 0) {
+    rounded.setMinutes(rounded.getMinutes() + 1);
   }
 
   return rounded;
@@ -209,7 +212,7 @@ function addMinutesToTime(timeValue, minutesToAdd) {
 function validateRideDateTime(dateValue, startTime, endTime) {
   const start = new Date(combineDateAndTime(dateValue, startTime));
   const end = new Date(combineDateAndTime(dateValue, endTime));
-  const now = new Date();
+  const now = floorToMinute(new Date());
 
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
     throw new Error('Please choose a valid departure window.');
@@ -235,14 +238,11 @@ function syncRideTimeConstraints(dateInput, startTimeInput, endTimeInput) {
   const isToday = dateInput.value === today;
 
   if (isToday) {
-    const minStartTime = formatTimeForInput(roundUpToQuarterHour(now));
-    startTimeInput.min = minStartTime;
+    const minStartTime = formatTimeForInput(floorToMinute(now));
 
-    if (!startTimeInput.value || startTimeInput.value < minStartTime) {
+    if (!startTimeInput.value) {
       startTimeInput.value = minStartTime;
     }
-  } else {
-    startTimeInput.min = '';
   }
 
   const minEndTime = addMinutesToTime(startTimeInput.value, 15);
@@ -975,11 +975,11 @@ async function setupCreateRidePage() {
   const endTimeInput = form.querySelector('input[name="endTime"]');
   const swapRouteButton = document.querySelector('#swap-route-button');
   const today = new Date();
-  const nextQuarterHour = roundUpToQuarterHour(today);
+  const nextMinute = roundUpToNextMinute(today);
 
   dateInput.min = formatDateForInput(today);
   dateInput.value = formatDateForInput(today);
-  startTimeInput.value = formatTimeForInput(nextQuarterHour);
+  startTimeInput.value = formatTimeForInput(nextMinute);
   endTimeInput.value = addMinutesToTime(startTimeInput.value, 60);
 
   if (!carInput.value) {
@@ -1025,7 +1025,7 @@ async function setupCreateRidePage() {
       applyUserRouteDefaults(form);
       dateInput.value = formatDateForInput(new Date());
       startTimeInput.value =
-          formatTimeForInput(roundUpToQuarterHour(new Date()));
+          formatTimeForInput(roundUpToNextMinute(new Date()));
       endTimeInput.value = addMinutesToTime(startTimeInput.value, 60);
       syncRideTimeConstraints(dateInput, startTimeInput, endTimeInput);
       openRideCreatedModal(payload.ride);
