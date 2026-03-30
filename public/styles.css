@@ -598,6 +598,16 @@ textarea::placeholder {
   min-width: 0;
 }
 
+.user-search-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.user-search-toolbar input {
+  width: 100%;
+}
+
 .checkbox-field {
   display: flex;
   align-items: center;
@@ -612,6 +622,39 @@ textarea::placeholder {
 
 .rides-grid {
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+}
+
+.user-results-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+}
+
+.user-card {
+  padding: 1.25rem;
+  display: grid;
+  gap: 1rem;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+}
+
+.user-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.user-card-header h2 {
+  margin: 0 0 0.4rem;
+  font-size: 1.2rem;
+}
+
+.user-card-grid {
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .ride-card {
@@ -903,6 +946,7 @@ textarea::placeholder {
   .marketing-hero,
   .visual-grid,
   .hub-grid,
+  .user-card-grid,
   .two-column-form,
   .route-fields,
   .card-grid,
@@ -979,6 +1023,11 @@ textarea::placeholder {
   .actions,
   .debug-card-header {
     flex-direction: column;
+    align-items: stretch;
+  }
+
+  .user-search-toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: stretch;
   }
 }

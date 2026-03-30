@@ -175,8 +175,28 @@ async function resolveUser({email, userId}) {
   return getUserByEmail(email);
 }
 
-async function getProfiles() {
+async function getProfiles(searchQuery) {
+  const query = normalizeText(searchQuery);
+  const where = query ? {
+    OR: [
+      {
+        name: {
+          contains: query,
+          mode: 'insensitive',
+        },
+      },
+      {
+        email: {
+          contains: query.toLowerCase(),
+          mode: 'insensitive',
+        },
+      },
+    ],
+  } :
+                        {};
+
   const profiles = await prisma.user.findMany({
+    where,
     orderBy: {
       name: 'asc',
     },

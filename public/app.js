@@ -1,6 +1,7 @@
 const page = document.body.dataset.page;
 const protectedPages = new Set([
-  'dashboard', 'create-ride', 'search-rides', 'my-rides', 'profile', 'debug'
+  'dashboard', 'create-ride', 'search-rides', 'my-rides', 'find-users',
+  'profile', 'debug'
 ]);
 
 const state = {
@@ -116,6 +117,24 @@ function showToast(message, tone = 'success') {
       toast.remove();
     }, 280);
   }, 2000);
+}
+
+function debounce(callback, delay) {
+  let timeoutId = null;
+
+  const debounced = (...args) => {
+    window.clearTimeout(timeoutId);
+    timeoutId = window.setTimeout(() => {
+      callback(...args);
+    }, delay);
+  };
+
+  debounced.cancel = () => {
+    window.clearTimeout(timeoutId);
+    timeoutId = null;
+  };
+
+  return debounced;
 }
 
 async function loadCurrentUser() {
@@ -419,13 +438,45 @@ function syncLandingPageAuthState() {
   }
 }
 
-async function loadProfiles() {
-  const payload = await api('/api/profiles');
+async function loadProfiles(searchQuery = '', options = {}) {
+  const params = new URLSearchParams();
+
+  if (String(searchQuery || '').trim()) {
+    params.set('query', searchQuery.trim());
+  }
+
+  const payload = await api(
+      `/api/profiles${params.toString() ? `?${params.toString()}` : ''}`,
+      options);
   state.profiles = payload.profiles;
   return payload.profiles;
 }
 
-async function loadRides(filters = {}) {
+function renderUserSearchCard(profile) {
+  return `
+    <article class="user-card">
+      <div class="user-card-header">
+        <div>
+          <h2>${escapeHtml(profile.name || 'Unnamed user')}</h2>
+          <p class="meta">${escapeHtml(profile.email)}</p>
+        </div>
+      </div>
+      <div class="user-card-grid">
+        <div>
+          <strong>Phone</strong>
+          <div class="meta">${escapeHtml(profile.phone || '—')}</div>
+        </div>
+        <div>
+          <strong>Default office</strong>
+          <div class="meta">${
+      escapeHtml(formatOfficeLocation(profile.defaultOffice) || '—')}</div>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+async function loadRides(filters = {}, options = {}) {
   const params = new URLSearchParams();
 
   if (filters.driver) {
@@ -442,7 +493,7 @@ async function loadRides(filters = {}) {
   }
 
   const payload = await api(
-      `/api/rides${params.toString() ? `?${params.toString()}` : ''}`);
+      `/api/rides${params.toString() ? `?${params.toString()}` : ''}`, options);
   state.rides = payload.rides;
   return payload.rides;
 }
@@ -819,12 +870,98 @@ async function setupDashboardPage() {
   if (hubGrid && userIsManager()) {
     hubGrid.insertAdjacentHTML('beforeend', `
           <a href="debug.html" class="hub-card">
-            <span class="hub-label">04</span>
+            <span class="hub-label">05</span>
             <h2>Debug data</h2>
             <p>Inspect all users, rides, requests, and ride chat data.</p>
           </a>
         `);
   }
+}
+
+async function setupFindUsersPage() {
+  const form = document.querySelector('#find-users-form');
+  const searchInput = form.querySelector('input[name="query"]');
+  const resultsContainer = document.querySelector('#users-results');
+  const resetButton = document.querySelector('#reset-user-search');
+  let activeRequestController = null;
+  let lastRequestedQuery = '';
+
+  const renderProfiles = (profiles, searchQuery = '') => {
+    if (!profiles.length) {
+      const message = searchQuery ?
+          `No users found for "${escapeHtml(searchQuery)}".` :
+          'No users available right now.';
+      resultsContainer.innerHTML = `<div class="empty-state">${message}</div>`;
+      return;
+    }
+
+    resultsContainer.innerHTML =
+        profiles.map((profile) => renderUserSearchCard(profile)).join('');
+  };
+
+  const refresh = async (searchQuery = '', signal) => {
+    const profiles = await loadProfiles(searchQuery, {signal});
+    renderProfiles(profiles, searchQuery);
+  };
+
+  const runSearch = async (searchQuery, {force = false} = {}) => {
+    if (!force && searchQuery === lastRequestedQuery) {
+      return;
+    }
+
+    if (activeRequestController) {
+      activeRequestController.abort();
+    }
+
+    lastRequestedQuery = searchQuery;
+    const requestController = new AbortController();
+    activeRequestController = requestController;
+
+    try {
+      await refresh(searchQuery, requestController.signal);
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        return;
+      }
+
+      if (activeRequestController === requestController) {
+        lastRequestedQuery = '';
+        setFeedback(error.message, true);
+      }
+    } finally {
+      if (activeRequestController === requestController) {
+        activeRequestController = null;
+      }
+    }
+  };
+
+  const scheduleSearch = debounce(() => {
+    runSearch(searchInput.value.trim());
+  }, 350);
+
+  await runSearch('', {force: true});
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    scheduleSearch.cancel();
+    await runSearch(searchInput.value.trim(), {force: true});
+  });
+
+  searchInput.addEventListener('input', () => {
+    scheduleSearch();
+  });
+
+  searchInput.addEventListener('change', async () => {
+    scheduleSearch.cancel();
+    await runSearch(searchInput.value.trim());
+  });
+
+  resetButton.addEventListener('click', async () => {
+    scheduleSearch.cancel();
+    searchInput.value = '';
+    lastRequestedQuery = '';
+    await runSearch('', {force: true});
+  });
 }
 
 async function setupCreateRidePage() {
@@ -890,7 +1027,6 @@ async function setupCreateRidePage() {
           formatTimeForInput(roundUpToQuarterHour(new Date()));
       endTimeInput.value = addMinutesToTime(startTimeInput.value, 60);
       syncRideTimeConstraints(dateInput, startTimeInput, endTimeInput);
-      setFeedback('Ride published successfully.');
       openRideCreatedModal(payload.ride);
     } catch (error) {
       setFeedback(error.message, true);
@@ -902,40 +1038,103 @@ async function setupSearchRidesPage() {
   const ridesList = document.querySelector('#rides-list');
   const searchForm = document.querySelector('#search-form');
   const resetButton = document.querySelector('#reset-search');
+  const driverInput = searchForm.querySelector('input[name="driver"]');
+  const startInput = searchForm.querySelector('input[name="start"]');
+  const endInput = searchForm.querySelector('input[name="end"]');
+  const openOnlyInput = searchForm.querySelector('input[name="openOnly"]');
+  let activeRequestController = null;
+  let lastRequestedFilterKey = '';
 
-  const refresh = async () => {
-    const rides = await loadRides(state.filters);
-    ridesList.innerHTML = rides.length ?
-        rides.map((ride) => renderRideCard(ride)).join('') :
-        '<div class="empty-state">No rides found. Try adjusting the filters.</div>';
-  };
-
-  await refresh();
-  await handleRideActions(ridesList, refresh);
-
-  searchForm.addEventListener('submit', async (event) => {
-    event.preventDefault();
+  const readFilters = () => {
     const formData = new FormData(searchForm);
-    state.filters = {
+
+    return {
       driver: String(formData.get('driver') || '').trim(),
       start: String(formData.get('start') || '').trim(),
       end: String(formData.get('end') || '').trim(),
       openOnly: formData.get('openOnly') === 'on',
     };
+  };
+
+  const refresh = async (signal) => {
+    const rides = await loadRides(state.filters, {signal});
+    ridesList.innerHTML = rides.length ?
+        rides.map((ride) => renderRideCard(ride)).join('') :
+        '<div class="empty-state">No rides found. Try adjusting the filters.</div>';
+  };
+
+  const runSearch = async (nextFilters, {force = false} = {}) => {
+    const nextFilterKey = JSON.stringify(nextFilters);
+    if (!force && nextFilterKey === lastRequestedFilterKey) {
+      return;
+    }
+
+    if (activeRequestController) {
+      activeRequestController.abort();
+    }
+
+    state.filters = nextFilters;
+    lastRequestedFilterKey = nextFilterKey;
+    const requestController = new AbortController();
+    activeRequestController = requestController;
 
     try {
-      await refresh();
-      setFeedback('Ride list updated.');
+      await refresh(requestController.signal);
+      if (activeRequestController !== requestController) {
+        return;
+      }
     } catch (error) {
-      setFeedback(error.message, true);
+      if (error.name === 'AbortError') {
+        return;
+      }
+
+      if (activeRequestController === requestController) {
+        lastRequestedFilterKey = '';
+        setFeedback(error.message, true);
+      }
+    } finally {
+      if (activeRequestController === requestController) {
+        activeRequestController = null;
+      }
     }
+  };
+
+  const scheduleSearch = debounce(() => {
+    runSearch(readFilters());
+  }, 350);
+
+  await runSearch(state.filters, {force: true});
+  await handleRideActions(ridesList, refresh);
+
+  searchForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    scheduleSearch.cancel();
+    await runSearch(readFilters(), {force: true});
+  });
+
+  [driverInput, startInput, endInput].forEach((input) => {
+    input.addEventListener('input', () => {
+      scheduleSearch();
+    });
+
+    input.addEventListener('change', () => {
+      scheduleSearch.cancel();
+      runSearch(readFilters());
+    });
+  });
+
+  openOnlyInput.addEventListener('change', async () => {
+    scheduleSearch.cancel();
+    await runSearch(readFilters());
   });
 
   resetButton.addEventListener('click', async () => {
+    scheduleSearch.cancel();
     searchForm.reset();
-    state.filters = {driver: '', start: '', end: '', openOnly: false};
-    await refresh();
-    setFeedback('Search filters cleared.');
+    lastRequestedFilterKey = '';
+    await runSearch(
+        {driver: '', start: '', end: '', openOnly: false},
+        {force: true});
   });
 }
 
@@ -1223,7 +1422,6 @@ async function setupDebugPage() {
     refreshButton.addEventListener('click', async () => {
       try {
         await refresh();
-        setFeedback('Debug data refreshed.');
       } catch (error) {
         setFeedback(error.message, true);
       }
@@ -1300,6 +1498,9 @@ async function init() {
       break;
     case 'my-rides':
       await setupMyRidesPage();
+      break;
+    case 'find-users':
+      await setupFindUsersPage();
       break;
     case 'debug':
       await setupDebugPage();

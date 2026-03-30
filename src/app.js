@@ -255,16 +255,14 @@ app.post('/api/auth/logout', (request, response, next) => {
   });
 });
 
-app.get(
-    '/api/profiles', requireAuth, requireManager,
-    async (_request, response, next) => {
-      try {
-        const profiles = await getProfiles();
-        response.json({profiles});
-      } catch (error) {
-        next(error);
-      }
-    });
+app.get('/api/profiles', requireAuth, async (request, response, next) => {
+  try {
+    const profiles = await getProfiles(request.query.query);
+    response.json({profiles});
+  } catch (error) {
+    next(error);
+  }
+});
 
 app.get(
     '/api/admin/overview', requireAuth, requireManager,
