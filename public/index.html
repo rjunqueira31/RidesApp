@@ -1,43 +1,44 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CTW Rides</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css" />
-  </head>
-  <body data-page="landing" class="landing-body">
-    <div class="shell shell-wide">
-      <header class="marketing-topbar">
-        <a href="index.html" class="brand-link">CTW Rides</a>
-        <nav id="landing-guest-actions" class="marketing-actions">
-          <a href="login.html" class="ghost-link">Login</a>
-          <a href="signup.html" class="button-link">Signup</a>
-        </nav>
-        <div id="landing-auth-actions" class="topbar-user" hidden>
-          <span id="current-user-pill" class="user-pill"></span>
-          <a href="dashboard.html" class="nav-link">Dashboard</a>
-          <a href="profile.html" class="nav-link">Profile</a>
-          <button type="button" id="logout-button" class="button-secondary">Logout</button>
-        </div>
-      </header>
 
-      <main class="marketing-hero">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MyRides</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body data-page="landing" class="landing-body">
+  <div class="shell shell-wide landing-shell">
+    <header class="marketing-topbar">
+      <a href="index.html" class="brand-link">MyRides</a>
+      <nav id="landing-guest-actions" class="marketing-actions">
+        <a href="login.html" class="ghost-link">Login</a>
+        <a href="signup.html" class="button-link">Signup</a>
+      </nav>
+      <div id="landing-auth-actions" class="topbar-user" hidden>
+        <span id="current-user-pill" class="user-pill"></span>
+        <a href="dashboard.html" class="nav-link">Dashboard</a>
+        <a href="profile.html" class="nav-link">Profile</a>
+        <button type="button" id="logout-button" class="button-secondary">Logout</button>
+      </div>
+    </header>
+
+    <section class="main-slogan">
+      <h1>Ride<br />Better &middot; Together &middot; Further</h1>
+    </section>
+    <main class="marketing-hero">
+      <section class="main-row">
         <section class="marketing-copy">
-          <span class="eyebrow eyebrow-light">Internal commuting made easy</span>
-          <h1>Share work rides with your team.</h1>
+          <span class="eyebrow eyebrow-light">Commuting made easy</span>
+          <h2 class="landing-section-title-left">Share rides with everyone</h2>
           <p class="hero-text">
-            CTW Rides helps teammates publish available seats, request rides, manage passengers,
+            MyRides helps users publish and request rides, manage passengers,
             and chat about pickup details in one place.
           </p>
-          <div class="feature-chips">
-            <span class="chip">Create rides</span>
-            <span class="chip">Search seats</span>
-            <span class="chip">Coordinate pickup</span>
-          </div>
         </section>
 
         <section class="hero-visual-card">
@@ -49,39 +50,111 @@
           <div class="hero-visual-content">
             <div class="visual-header">
               <div>
-                <p class="mini-label">Today’s routes</p>
-                <h2>Commute dashboard</h2>
+                <h2>MyRides dashboard</h2>
               </div>
-              <span class="mini-badge">Live</span>
             </div>
             <div class="visual-grid">
-              <article class="visual-panel accent-panel">
-                <h3>Porto Office</h3>
-                <p>3 rides available this morning</p>
+              <article class="visual-panel">
+                <h3>Driver tools</h3>
                 <ul>
-                  <li>Braga → Porto</li>
-                  <li>Guimarães → Porto</li>
-                  <li>Matosinhos → Porto</li>
+                  <li>Publish a ride</li>
+                  <li>Accept requests</li>
+                  <li>Manage rides</li>
+                  <li>Message passengers</li>
+                  <li>Commute together</li>
+                </ul>
+              </article>
+              <article class="visual-panel accent-panel">
+                <h3>Find rides</h3>
+                <p>Porto office - 3 rides available</p>
+                <ul>
+                  <li>Braga → Porto office</li>
+                  <li>Guimarães → Porto office</li>
+                  <li>Matosinhos → Porto office</li>
                 </ul>
               </article>
               <article class="visual-panel">
-                <h3>Driver tools</h3>
-                <p>Publish a route, accept requests, and message passengers.</p>
+                <h3>Passenger tools</h3>
+                <br>
+                <ul>
+                  <li>Search by route or driver</li>
+                  <li>Request a seat</li>
+                  <li>Get ride updates</li>
+                  <li>Enjoy the ride</li>
+                </ul>
               </article>
               <article class="visual-panel">
-                <h3>Passenger flow</h3>
-                <p>Search by route or driver, request a seat, and get updates fast.</p>
-              </article>
-              <article class="visual-panel">
-                <h3>Team benefit</h3>
-                <p>Less parking stress, better coordination, and easier commuting.</p>
+                <h3>Benefits</h3>
+                <br>
+                <ul>
+                  <li>Less parking stress</li>
+                  <li>Save time and money</li>
+                  <li>Connect with colleagues</li>
+                  <li>Support sustainability</li>
+                </ul>
               </article>
             </div>
           </div>
         </section>
-      </main>
-    </div>
+      </section>
+      <section class="journey-showcase main-row">
+        <div class="journey-showcase-visual">
+          <img src="images/RideRoute.png"
+            alt="Route illustration showing a commuter moving between two mapped points." />
+        </div>
+        <div class="journey-showcase-copy">
+          <span class="eyebrow eyebrow-light">We leave no one behind!</span>
+          <h2 class="landing-section-title-right">From home to office, without the planning mess</h2>
+          <p>
+            MyRides keeps the route simple: publish where you start and where you
+            are going. Everyone else sees the same
+            path, knows who is driving, and can coordinate in one place.
+          </p>
+          <p>
+            That means fewer last-minute messages, fewer empty seats, and a much
+            smoother commute.
+          </p>
+        </div>
+      </section>
+    </main>
+  </div>
 
-    <script src="app.js"></script>
-  </body>
+  <footer class="footer">
+    <div class="shell shell-wide">
+      <div class="footer-content">
+        <p>&copy; 2026 MyRides. All rights reserved.</p>
+      </div>
+      <div class="social-media" aria-label="Social media links">
+        <ul>
+          <li class="social-media-icons">
+            <a href="https://www.google.com" aria-label="Myrides on Facebook">
+              <img src="images/icon_facebook.svg" alt="" class="social-media-icon-image" />
+            </a>
+          </li>
+          <li class="social-media-icons">
+            <a href="https://www.google.com" aria-label="Myrides on Instagram">
+              <img src="images/icon_instagram.svg" alt="" class="social-media-icon-image" />
+            </a>
+          </li>
+          <li class="social-media-icons">
+            <a href="https://www.google.com" aria-label="Myrides on LinkedIn">
+              <img src="images/icon_Linkedin.svg" alt="" class="social-media-icon-image" />
+            </a>
+          </li>
+          <li class="social-media-icons">
+            <a href="https://www.google.com" aria-label="Myrides on X">
+              <img src="images/icon_x.svg" alt="" class="social-media-icon-image" />
+            </a>
+          </li>
+        </ul>
+      </div>
+      <div class="contact-info">
+        <p><b>Contact us: </b><a href="mailto:myrides.support@gmail.com">myrides.support@gmail.com</a></p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+
 </html>

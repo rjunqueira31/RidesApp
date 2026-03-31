@@ -51,7 +51,7 @@ model Ride {
   startWindowEnd   DateTime
   seatsTotal       Int
   seatsLeft        Int
-  car              String
+  car              String?
   notes            String?
   createdAt        DateTime  @default(now())
 

@@ -3,13 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Search rides · MyRides</title>
+    <title>Find users · MyRides</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
   </head>
-  <body data-page="search-rides" class="app-body">
+  <body data-page="find-users" class="app-body">
     <div class="shell shell-wide">
       <header class="app-topbar">
         <a href="index.html" class="brand-link">MyRides</a>
@@ -23,22 +23,16 @@
 
       <main class="page-grid single-column">
         <section class="panel-card">
-          <span class="eyebrow">Passenger and driver area</span>
-          <h1>Search and manage rides</h1>
-          <p class="section-copy">Filter rides, request seats, manage passengers, and use chat.</p>
+          <span class="eyebrow">Contact users</span>
+          <h1>Find users</h1>
+          <p class="section-copy">Search by name or email to quickly find who you need to contact.</p>
 
-          <form id="search-form" class="toolbar search-toolbar">
-            <input type="text" name="driver" placeholder="Filter by driver" />
-            <input type="text" name="start" placeholder="Filter by start point" />
-            <input type="text" name="end" placeholder="Filter by end point" />
-            <label class="checkbox-field">
-              <input type="checkbox" name="openOnly" />
-              Only show rides with seats left
-            </label>
-            <button type="button" id="reset-search" class="button-secondary">Reset</button>
+          <form id="find-users-form" class="toolbar search-toolbar user-search-toolbar">
+            <input type="text" name="query" placeholder="Search by name or email" />
+            <button type="button" id="reset-user-search" class="button-secondary">Reset</button>
           </form>
 
-          <div id="rides-list" class="rides-grid"></div>
+          <div id="users-results" class="user-results-grid"></div>
         </section>
       </main>
     </div>

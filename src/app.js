@@ -64,10 +64,16 @@ function parseDateTime(value, label) {
   return parsed;
 }
 
+function floorToMinute(date) {
+  const normalized = new Date(date);
+  normalized.setSeconds(0, 0);
+  return normalized;
+}
+
 function validateRideWindow(startWindowStart, startWindowEnd) {
   const start = parseDateTime(startWindowStart, 'Earliest departure');
   const end = parseDateTime(startWindowEnd, 'Latest departure');
-  const now = new Date();
+  const now = floorToMinute(new Date());
 
   if (start.getTime() < now.getTime()) {
     const error = new Error('Earliest departure must be in the future.');
@@ -255,16 +261,14 @@ app.post('/api/auth/logout', (request, response, next) => {
   });
 });
 
-app.get(
-    '/api/profiles', requireAuth, requireManager,
-    async (_request, response, next) => {
-      try {
-        const profiles = await getProfiles();
-        response.json({profiles});
-      } catch (error) {
-        next(error);
-      }
-    });
+app.get('/api/profiles', requireAuth, async (request, response, next) => {
+  try {
+    const profiles = await getProfiles(request.query.query);
+    response.json({profiles});
+  } catch (error) {
+    next(error);
+  }
+});
 
 app.get(
     '/api/admin/overview', requireAuth, requireManager,
@@ -367,7 +371,6 @@ app.post(
         assertRequired(endPoint, 'End point');
         assertRequired(startWindowStart, 'Earliest departure');
         assertRequired(startWindowEnd, 'Latest departure');
-        assertRequired(car, 'Car');
 
         validateRideWindow(startWindowStart, startWindowEnd);
 

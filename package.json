@@ -1,7 +1,7 @@
 {
   "name": "ridesapp",
   "version": "1.0.0",
-  "description": "CTW ride sharing MVP",
+  "description": "MyRides sharing app",
   "main": "src/app.js",
   "scripts": {
     "postinstall": "prisma generate",

@@ -100,7 +100,7 @@ function toPublicRide(ride) {
     startWindowEnd: toIsoString(ride.startWindowEnd),
     seatsTotal: ride.seatsTotal,
     seatsLeft: ride.seatsLeft,
-    car: ride.car,
+    car: ride.car || '',
     notes: ride.notes || '',
     createdAt: toIsoString(ride.createdAt),
     driver: toPublicProfile(ride.driver),
@@ -175,8 +175,28 @@ async function resolveUser({email, userId}) {
   return getUserByEmail(email);
 }
 
-async function getProfiles() {
+async function getProfiles(searchQuery) {
+  const query = normalizeText(searchQuery);
+  const where = query ? {
+    OR: [
+      {
+        name: {
+          contains: query,
+          mode: 'insensitive',
+        },
+      },
+      {
+        email: {
+          contains: query.toLowerCase(),
+          mode: 'insensitive',
+        },
+      },
+    ],
+  } :
+                        {};
+
   const profiles = await prisma.user.findMany({
+    where,
     orderBy: {
       name: 'asc',
     },
@@ -356,7 +376,7 @@ async function createRide(rideInput) {
       startWindowEnd: new Date(rideInput.startWindowEnd),
       seatsTotal: Number(rideInput.seatsTotal),
       seatsLeft: Number(rideInput.seatsTotal),
-      car: normalizeText(rideInput.car),
+      car: normalizeText(rideInput.car) || null,
       notes: normalizeText(rideInput.notes) || null,
     },
     include: rideInclude(),
