@@ -35,6 +35,8 @@ body {
 
 .landing-body {
   min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
 }
 
 a {
@@ -99,7 +101,7 @@ button:disabled {
   padding: 1.5rem 0 3rem;
 }
 
-.landing-body .shell {
+.landing-body .landing-shell {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
@@ -112,6 +114,46 @@ button:disabled {
 
 .shell-narrow {
   width: min(720px, calc(100% - 2rem));
+}
+
+.footer .shell {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+}
+
+.footer-content p,
+.contact-info p {
+  margin: 0;
+}
+
+.social-media ul {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.social-media-icons {
+  display: flex;
+}
+
+.social-media-icons a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.social-media-icon-image {
+  display: block;
+  width: 1.4rem;
+  height: 1.4rem;
 }
 
 .marketing-topbar,
@@ -176,16 +218,101 @@ button:disabled {
 }
 
 .marketing-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
-  gap: 2rem;
-  align-items: center;
-  min-height: calc(100vh - 140px);
+  margin-top: 0.35rem;
 }
 
 .landing-body .marketing-hero {
-  flex: 1;
+  flex: 0 0 auto;
   min-height: 0;
+}
+
+.main-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2rem;
+  align-items: center;
+  width: 100%;
+  margin: 0 auto;
+  margin-bottom: 4rem;
+}
+
+.journey-showcase {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2rem;
+  align-items: center;
+  margin-top: 1.8rem;
+  padding: 0;
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.journey-showcase-visual {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  width: 100%;
+}
+
+.journey-showcase-visual img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.journey-showcase-copy {
+  display: grid;
+  gap: 0.9rem;
+  width: 100%;
+  justify-self: stretch;
+  justify-items: end;
+  max-width: none;
+}
+
+.marketing-copy {
+  max-width: 34rem;
+}
+
+.landing-section-title-left {
+  margin: 0;
+  font-size: clamp(2.2rem, 6vw, 4.2rem);
+  line-height: 0.96;
+  letter-spacing: -0.06em;
+}
+
+.landing-section-title-right {
+  margin: 0;
+  font-size: clamp(2.2rem, 6vw, 4.2rem);
+  line-height: 0.96;
+  letter-spacing: -0.06em;
+  text-align: right;
+}
+
+.journey-showcase-copy p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.7;
+  text-align: right;
+}
+
+.main-slogan {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 4rem;
+}
+
+.main-slogan h1 {
+  padding-top: 0.45rem;
+  margin: 0;
+  font-size: clamp(3.2rem, 8vw, 6.2rem);
+  line-height: 0.96;
+  letter-spacing: -0.06em;
+  text-align: center;
 }
 
 .marketing-copy h1,
@@ -193,7 +320,7 @@ button:disabled {
 .panel-card h1,
 .form-card h1 {
   margin: 0 0 1rem;
-  font-size: clamp(3.2rem, 8vw, 6.2rem);
+  font-size: clamp(2.2rem, 6vw, 4.2rem);
   line-height: 0.96;
   letter-spacing: -0.06em;
 }
@@ -476,11 +603,10 @@ textarea::placeholder {
 
 .hub-hero {
   margin-bottom: 1.5rem;
+  display: flex;
+  justify-content: center;
 }
 
-.hub-hero h1 {
-  font-size: clamp(2.8rem, 6vw, 4.6rem);
-}
 
 .hub-card {
   min-height: 220px;
@@ -935,7 +1061,8 @@ textarea::placeholder {
 }
 
 @media (max-width: 960px) {
-  .marketing-hero,
+  .main-row,
+  .journey-showcase,
   .visual-grid,
   .hub-grid,
   .user-card-grid,
@@ -987,6 +1114,11 @@ textarea::placeholder {
     flex-direction: column;
     align-items: stretch;
   }
+
+  .journey-showcase {
+    padding: 1.1rem;
+  }
+
 }
 
 @media (max-width: 640px) {

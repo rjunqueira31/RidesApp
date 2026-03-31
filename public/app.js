@@ -23,6 +23,8 @@ const OFFICE_LOCATION_LABELS = {
 };
 
 const PENDING_TOAST_KEY = 'ridesapp.pendingToast';
+const PROFILE_RETURN_PATH_KEY = 'ridesapp.profileReturnPath';
+const CREATE_RIDE_RETURN_PATH_KEY = 'ridesapp.createRideReturnPath';
 
 function userIsManager() {
   return state.currentUser?.role === 'MANAGER_USER';
@@ -83,6 +85,56 @@ function consumePendingToast() {
   } catch {
     return null;
   }
+}
+
+function getCurrentPagePath() {
+  const path = window.location.pathname.split('/').pop();
+  return path || 'index.html';
+}
+
+function setReturnPath(storageKey, path) {
+  if (!path) {
+    return;
+  }
+
+  sessionStorage.setItem(storageKey, path);
+}
+
+function consumeReturnPath(storageKey, fallbackPath) {
+  const returnPath = sessionStorage.getItem(storageKey);
+  if (returnPath) {
+    sessionStorage.removeItem(storageKey);
+    return returnPath;
+  }
+
+  return fallbackPath;
+}
+
+function showPendingToastIfPresent() {
+  const pendingToast = consumePendingToast();
+  if (pendingToast?.message) {
+    showToast(pendingToast.message, pendingToast.tone);
+  }
+}
+
+function wireReturnPathLinks() {
+  const currentPath = getCurrentPagePath();
+
+  document.addEventListener('click', (event) => {
+    const link = event.target.closest('a[href]');
+    if (!link) {
+      return;
+    }
+
+    const href = link.getAttribute('href');
+    if (href === 'profile.html') {
+      setReturnPath(PROFILE_RETURN_PATH_KEY, currentPath);
+    }
+
+    if (href === 'create-ride.html') {
+      setReturnPath(CREATE_RIDE_RETURN_PATH_KEY, currentPath);
+    }
+  });
 }
 
 function ensureToastContainer() {
@@ -324,7 +376,8 @@ function ensureRideCreatedModal() {
   modal = document.querySelector('#ride-created-modal');
   modal.addEventListener('click', (event) => {
     if (event.target.closest('[data-go-to-landing-after-ride="true"]')) {
-      redirectTo('index.html');
+      redirectTo(
+          consumeReturnPath(CREATE_RIDE_RETURN_PATH_KEY, 'dashboard.html'));
       return;
     }
 
@@ -788,11 +841,6 @@ function ensureManager() {
 
 async function setupLandingPage() {
   syncLandingPageAuthState();
-
-  const pendingToast = consumePendingToast();
-  if (pendingToast?.message) {
-    showToast(pendingToast.message, pendingToast.tone);
-  }
 }
 
 async function setupSignupPage() {
@@ -860,13 +908,6 @@ async function setupLoginPage() {
 
 async function setupDashboardPage() {
   const hubGrid = document.querySelector('.hub-grid');
-  document.querySelector('#dashboard-title').textContent =
-      `Welcome, ${state.currentUser.name}`;
-
-  const pendingToast = consumePendingToast();
-  if (pendingToast?.message) {
-    showToast(pendingToast.message, pendingToast.tone);
-  }
 
   if (hubGrid && userIsManager()) {
     hubGrid.insertAdjacentHTML('beforeend', `
@@ -1459,7 +1500,7 @@ async function setupProfilePage() {
       state.currentUser = payload.profile;
       hydrateUserPill();
       setPendingToast('Profile updated successfully.');
-      redirectTo('index.html');
+      redirectTo(consumeReturnPath(PROFILE_RETURN_PATH_KEY, 'dashboard.html'));
     } catch (error) {
       setFeedback(error.message, true);
     }
@@ -1476,6 +1517,9 @@ async function init() {
   if (page === 'debug' && !ensureManager()) {
     return;
   }
+
+  wireReturnPathLinks();
+  showPendingToastIfPresent();
 
   switch (page) {
     case 'landing':
