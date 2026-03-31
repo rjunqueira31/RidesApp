@@ -781,6 +781,10 @@ textarea::placeholder {
   gap: 1rem;
 }
 
+.ride-card-actions {
+  justify-content: flex-start;
+}
+
 .route {
   font-size: 1.2rem;
   font-weight: 800;
@@ -790,6 +794,14 @@ textarea::placeholder {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.8rem;
+}
+
+.ride-window-field {
+  grid-column: 1 / -1;
+}
+
+.ride-window-meta {
+  white-space: nowrap;
 }
 
 .ride-notes {
@@ -836,8 +848,10 @@ textarea::placeholder {
   width: min(680px, 100%);
   max-height: min(80vh, 720px);
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 1rem;
   padding: 1.25rem;
+  overflow: hidden;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -864,6 +878,72 @@ textarea::placeholder {
 
 .ride-created-modal-panel {
   width: min(560px, 100%);
+}
+
+.ride-details-modal-panel {
+  width: min(780px, 100%);
+  max-height: min(92vh, 960px);
+  overflow: auto;
+}
+
+.ride-details-modal-content {
+  overflow: visible;
+  min-height: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.ride-details-summary,
+.ride-details-section {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.ride-details-title {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.ride-details-title-text {
+  min-width: 0;
+}
+
+.ride-details-title-pill {
+  font-size: 0.82rem;
+}
+
+.ride-details-grid {
+  margin-top: 0.2rem;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 3fr) minmax(0, 2fr) minmax(0, 2fr);
+}
+
+.ride-details-grid-window .meta,
+.ride-details-grid-car .meta {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ride-details-section h3 {
+  margin: 0;
+}
+
+.ride-details-summary .request-form-compact {
+  justify-items: start;
+}
+
+.ride-details-notes {
+  padding: 1rem;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  color: var(--muted);
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .ride-created-copy {
@@ -930,14 +1010,87 @@ textarea::placeholder {
   padding: 0.9rem;
 }
 
+.ride-driver-requests-section {
+  display: grid;
+  gap: 0.75rem;
+  min-height: 0;
+}
+
+.ride-driver-requests-list {
+  gap: 0.35rem;
+}
+
+.ride-driver-requests-list li {
+  padding: 0.42rem 0.7rem;
+}
+
+.ride-driver-requests-list .request-item {
+  display: block;
+}
+
+.ride-driver-requests-list .request-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.ride-driver-requests-list .request-identity {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.ride-driver-requests-list .request-identity strong,
+.ride-driver-requests-list .request-identity .meta,
+.ride-driver-requests-list .request-identity .pill {
+  line-height: 1.1;
+}
+
+.ride-driver-requests-list .request-identity .meta {
+  overflow-wrap: anywhere;
+}
+
+.ride-driver-requests-list .request-divider {
+  color: var(--muted);
+}
+
+.ride-driver-requests-list .actions {
+  gap: 0.35rem;
+  flex-wrap: nowrap;
+}
+
+.ride-driver-requests-list .actions > button {
+  padding: 0.34rem 0.78rem;
+  font-size: 0.82rem;
+  line-height: 1.1;
+  box-shadow: none;
+}
+
+.ride-driver-requests-list .actions > button:hover {
+  box-shadow: none;
+}
+
 .chat-box {
   display: grid;
   gap: 0.8rem;
+  min-height: 0;
 }
 
 .request-form {
   display: grid;
   gap: 0.75rem;
+}
+
+.request-form-compact {
+  justify-items: start;
+}
+
+.request-form-compact > button {
+  width: auto;
 }
 
 .request-form label {
@@ -946,9 +1099,22 @@ textarea::placeholder {
   font-weight: 600;
 }
 
+.leave-ride-button {
+  background: linear-gradient(135deg, #8c1023, #df4a5f);
+  color: #fff;
+}
+
+.leave-ride-button:hover {
+  box-shadow: 0 14px 24px rgba(140, 16, 35, 0.24);
+}
+
 .chat-messages {
   max-height: 220px;
   overflow: auto;
+}
+
+.ride-details-modal-content .chat-messages {
+  max-height: min(34vh, 320px);
 }
 
 .chat-message {
@@ -1072,6 +1238,10 @@ textarea::placeholder {
   .toolbar,
   .debug-meta-grid,
   .debug-section-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ride-details-grid {
     grid-template-columns: 1fr;
   }
 

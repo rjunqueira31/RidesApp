@@ -213,6 +213,47 @@ function formatDateTime(value) {
       .format(new Date(value));
 }
 
+function formatCalendarDate(value) {
+  return new Intl
+      .DateTimeFormat(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
+      .format(new Date(value));
+}
+
+function formatClockTime(value) {
+  return new Intl
+      .DateTimeFormat(undefined, {
+        hour: 'numeric',
+        minute: '2-digit',
+      })
+      .format(new Date(value));
+}
+
+function isSameCalendarDay(leftValue, rightValue) {
+  const left = new Date(leftValue);
+  const right = new Date(rightValue);
+
+  return left.getFullYear() === right.getFullYear() &&
+      left.getMonth() === right.getMonth() &&
+      left.getDate() === right.getDate();
+}
+
+function formatDateTimeRange(startValue, endValue) {
+  if (!startValue || !endValue) {
+    return startValue ? formatDateTime(startValue) : '—';
+  }
+
+  if (isSameCalendarDay(startValue, endValue)) {
+    return `${formatCalendarDate(startValue)}, ${
+        formatClockTime(startValue)} - ${formatClockTime(endValue)}`;
+  }
+
+  return `${formatDateTime(startValue)} - ${formatDateTime(endValue)}`;
+}
+
 function formatDateForInput(date) {
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000)
       .toISOString()
@@ -226,6 +267,29 @@ function formatTimeForInput(date) {
 
 function combineDateAndTime(dateValue, timeValue) {
   return `${dateValue}T${timeValue}`;
+}
+
+function parseTimeValueToMinutes(timeValue) {
+  const [hours, minutes] =
+      String(timeValue || '').split(':').map((value) => Number(value));
+
+  if ([hours, minutes].some((value) => Number.isNaN(value))) {
+    return null;
+  }
+
+  return hours * 60 + minutes;
+}
+
+function shouldTreatEndTimeAsNextDay(startTime, endTime) {
+  const startMinutes = parseTimeValueToMinutes(startTime);
+  const endMinutes = parseTimeValueToMinutes(endTime);
+
+  if (startMinutes === null || endMinutes === null ||
+      endMinutes > startMinutes) {
+    return false;
+  }
+
+  return startMinutes >= 22 * 60 && startMinutes - endMinutes > 20 * 60;
 }
 
 function floorToMinute(date) {
@@ -268,6 +332,10 @@ function validateRideDateTime(dateValue, startTime, endTime) {
 
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
     throw new Error('Please choose a valid departure window.');
+  }
+
+  if (shouldTreatEndTimeAsNextDay(startTime, endTime)) {
+    end.setDate(end.getDate() + 1);
   }
 
   if (start.getTime() < now.getTime()) {
@@ -349,6 +417,228 @@ function openNotesModal(notesText) {
   modal.hidden = false;
 }
 
+let activeRideDetailsRefresh = null;
+
+function ensureRideDetailsModal() {
+  let modal = document.querySelector('#ride-details-modal');
+  if (modal) {
+    return modal;
+  }
+
+  document.body.insertAdjacentHTML('beforeend', `
+    <div id="ride-details-modal" class="notes-modal" hidden>
+      <div class="notes-modal-backdrop" data-close-ride-details-modal="true"></div>
+      <div class="notes-modal-panel ride-details-modal-panel" role="dialog" aria-modal="true" aria-labelledby="ride-details-modal-title">
+        <div class="notes-modal-header">
+          <h2 id="ride-details-modal-title" class="ride-details-title">Ride details</h2>
+          <button type="button" class="button-secondary notes-modal-close" data-close-ride-details-modal="true" aria-label="Close ride details">Close</button>
+        </div>
+        <div id="ride-details-modal-content" class="ride-details-modal-content"></div>
+      </div>
+    </div>
+  `);
+
+  modal = document.querySelector('#ride-details-modal');
+  modal.addEventListener('click', async (event) => {
+    if (event.target.closest('[data-close-ride-details-modal="true"]')) {
+      modal.hidden = true;
+      return;
+    }
+
+    const manageRequestButton = event.target.closest('.manage-request');
+    if (manageRequestButton) {
+      try {
+        await api(`/api/requests/${manageRequestButton.dataset.requestId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            decision: manageRequestButton.dataset.decision,
+          }),
+        });
+        await refreshRideDetailsModal();
+        if (activeRideDetailsRefresh) {
+          await activeRideDetailsRefresh();
+        }
+        showToast(`Request ${manageRequestButton.dataset.decision}.`);
+      } catch (error) {
+        showToast(error.message, 'error');
+      }
+      return;
+    }
+
+    try {
+      const leaveRideButton = event.target.closest('.leave-ride-button');
+      if (!leaveRideButton) {
+        return;
+      }
+
+      await leaveRide(leaveRideButton.dataset.requestId, async () => {
+        await refreshRideDetailsModal();
+        if (activeRideDetailsRefresh) {
+          await activeRideDetailsRefresh();
+        }
+      });
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
+  });
+
+  modal.addEventListener('submit', async (event) => {
+    const requestForm = event.target.closest('[data-request-ride-id]');
+    if (requestForm) {
+      event.preventDefault();
+
+      try {
+        await requestSeatForRide(
+            requestForm.dataset.requestRideId, async () => {
+              await refreshRideDetailsModal();
+              if (activeRideDetailsRefresh) {
+                await activeRideDetailsRefresh();
+              }
+            });
+      } catch (error) {
+        showToast(error.message, 'error');
+      }
+      return;
+    }
+
+    const chatForm = event.target.closest('.chat-form');
+    if (!chatForm) {
+      return;
+    }
+
+    event.preventDefault();
+    const rideId = chatForm.dataset.chatRideId;
+    const formData = new FormData(chatForm);
+    const text = String(formData.get('text') || '').trim();
+
+    if (!text) {
+      showToast('Write a message before sending.', 'error');
+      return;
+    }
+
+    try {
+      await api(`/api/rides/${rideId}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({text}),
+      });
+      await refreshRideDetailsModal();
+      if (activeRideDetailsRefresh) {
+        await activeRideDetailsRefresh();
+      }
+      showToast('Message sent.');
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
+  });
+
+  return modal;
+}
+
+function renderRideDetailsContent(ride) {
+  const isDriver = state.currentUser && ride.driverId === state.currentUser.id;
+  const currentRequest = getCurrentUserRequest(ride);
+  const notes = String(ride.notes || '').trim() || 'No notes for this ride.';
+
+  return `
+    <div class="ride-details-summary">
+      <div class="card-grid ride-details-grid">
+        <div class="ride-details-grid-window">
+          <strong>Window</strong>
+          <div class="meta">${
+      escapeHtml(formatDateTimeRange(
+          ride.startWindowStart, ride.startWindowEnd))}</div>
+        </div>
+        <div class="ride-details-grid-car">
+          <strong>Car</strong>
+          <div class="meta">${escapeHtml(ride.car || '—')}</div>
+        </div>
+        <div class="ride-details-grid-seats">
+          <strong>Seats left</strong>
+          <div class="meta">${ride.seatsLeft} / ${ride.seatsTotal}</div>
+        </div>
+        <div class="ride-details-grid-requests">
+          <strong>Requests</strong>
+          <div class="meta">${ride.requests.length}</div>
+        </div>
+      </div>
+      <div class="pill-row">
+        ${
+      currentRequest ?
+          `<span class="pill status-${currentRequest.status}">Your request: ${
+              escapeHtml(currentRequest.status)}</span>` :
+          ''}
+      </div>
+      ${renderRideSeatAction(ride, {
+    compact: true
+  })}
+    </div>
+
+    <section class="ride-details-section">
+      <h3>Notes</h3>
+      <div class="ride-details-notes">${escapeHtml(notes)}</div>
+    </section>
+
+    ${isDriver ? renderDriverRequests(ride) : ''}
+    ${renderChat(ride)}
+  `;
+}
+
+async function refreshRideDetailsModal() {
+  const modal = ensureRideDetailsModal();
+  const rideId = modal.dataset.rideId;
+
+  if (!rideId) {
+    return;
+  }
+
+  const content = modal.querySelector('#ride-details-modal-content');
+  const payload = await api(`/api/rides/${rideId}`);
+  const ride = payload.ride;
+  const driverName = ride.driver?.name || ride.driverEmail;
+
+  modal.querySelector('#ride-details-modal-title').innerHTML =
+      `<span class="ride-details-title-text">${
+          escapeHtml(`${ride.startPoint} → ${ride.endPoint} | Driver: ${
+              driverName}`)}</span>${
+          renderRideAvailabilityPill(ride, 'ride-details-title-pill')}`;
+  content.innerHTML = renderRideDetailsContent(ride);
+}
+
+async function openRideDetailsModal(rideId, refresh) {
+  const modal = ensureRideDetailsModal();
+  const content = modal.querySelector('#ride-details-modal-content');
+
+  activeRideDetailsRefresh = refresh;
+  modal.dataset.rideId = rideId;
+  modal.hidden = false;
+  modal.querySelector('#ride-details-modal-title').textContent = 'Ride details';
+  content.innerHTML = '<div class="empty-state">Loading ride details...</div>';
+
+  try {
+    await refreshRideDetailsModal();
+  } catch (error) {
+    modal.hidden = true;
+    showToast(error.message, 'error');
+  }
+}
+
+async function requestSeatForRide(rideId, refresh) {
+  await api(`/api/rides/${rideId}/requests`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+  await refresh();
+  showToast('Seat request sent.');
+}
+
+async function leaveRide(requestId, refresh) {
+  await api(`/api/requests/${requestId}`, {
+    method: 'DELETE',
+  });
+  await refresh();
+  showToast('You left the ride.');
+}
+
 function ensureRideCreatedModal() {
   let modal = document.querySelector('#ride-created-modal');
   if (modal) {
@@ -403,8 +693,8 @@ function openRideCreatedModal(ride) {
     <div class="ride-created-route">${escapeHtml(ride.startPoint)} to ${
       escapeHtml(ride.endPoint)}</div>
     <div class="ride-created-meta">${
-      escapeHtml(formatDateTime(ride.startWindowStart))} to ${
-      escapeHtml(formatDateTime(ride.startWindowEnd))}</div>
+      escapeHtml(formatDateTimeRange(
+          ride.startWindowStart, ride.startWindowEnd))}</div>
     <div class="ride-created-meta">${escapeHtml(carLabel)} · ${
       escapeHtml(ride.seatsTotal)} seat${
       Number(ride.seatsTotal) === 1 ? '' : 's'}</div>
@@ -558,20 +848,44 @@ function getCurrentUserRequest(ride) {
   }
 
   return ride.requests.find(
-      (request) => request.passengerId === state.currentUser.id);
+      (request) => request.passengerId === state.currentUser.id &&
+          ['pending', 'accepted'].includes(request.status));
 }
 
-function userCanChat(ride) {
-  if (!state.currentUser) {
-    return false;
+function renderRideSeatAction(ride, options = {}) {
+  const {allowRequest = true, compact = false} = options;
+  const isDriver = state.currentUser && ride.driverId === state.currentUser.id;
+  const currentRequest = getCurrentUserRequest(ride);
+
+  if (currentRequest) {
+    return `
+      <div class="request-form${compact ? ' request-form-compact' : ''}">
+        <button type="button" class="leave-ride-button" data-request-id="${
+        currentRequest.id}">Leave ride</button>
+      </div>
+    `;
   }
 
-  if (ride.driverId === state.currentUser.id) {
-    return true;
+  if (!allowRequest || !state.currentUser || isDriver || ride.seatsLeft <= 0) {
+    return '';
   }
 
-  const request = getCurrentUserRequest(ride);
-  return Boolean(request && ['pending', 'accepted'].includes(request.status));
+  return `
+    <form class="request-form${
+      compact ? ' request-form-compact' :
+                ''}" data-request-ride-id="${ride.id}">
+      <button type="submit">Request seat</button>
+    </form>
+  `;
+}
+
+function renderRideAvailabilityPill(ride, extraClass = '') {
+  const statusClass =
+      ride.seatsLeft === 0 ? 'status-declined' : 'status-accepted';
+  const label = ride.seatsLeft === 0 ? 'Full' : 'Open';
+
+  return `<span class="pill ${statusClass}${
+      extraClass ? ` ${extraClass}` : ''}">${label}</span>`;
 }
 
 function renderDriverRequests(ride) {
@@ -580,34 +894,37 @@ function renderDriverRequests(ride) {
   }
 
   return `
-    <section>
+    <section class="ride-driver-requests-section">
       <h3>Passenger requests</h3>
-      <ul class="request-list">
+      <ul class="request-list ride-driver-requests-list">
         ${
       ride.requests
           .map(
               (request) => `
               <li>
                 <div class="request-item">
-                  <strong>${
+                  <div class="request-item-row">
+                    <span class="request-identity"><strong>${
                   escapeHtml(
                       request.passenger?.name ||
-                      request.passengerEmail)}</strong>
-                  <span class="meta">${escapeHtml(request.passengerEmail)} · ${
-                  escapeHtml(request.message || 'No message')}</span>
-                  <span class="pill status-${request.status}">${
-                  escapeHtml(request.status)}</span>
-                  ${
+                      request
+                          .passengerEmail)}</strong> <span class="request-divider">-</span> <span class="meta">${
+                  escapeHtml(
+                      request
+                          .passengerEmail)}</span> <span class="request-divider">-</span> <span class="pill status-${
+                  request.status}">${escapeHtml(request.status)}</span></span>
+                    ${
                   request.status === 'pending' ?
                       `
-                      <div class="actions">
-                        <button type="button" class="manage-request" data-request-id="${
+                        <div class="actions">
+                          <button type="button" class="manage-request" data-request-id="${
                           request.id}" data-decision="accepted">Accept</button>
-                        <button type="button" class="manage-request button-secondary" data-request-id="${
+                          <button type="button" class="manage-request button-secondary" data-request-id="${
                           request.id}" data-decision="declined">Decline</button>
-                      </div>
-                    ` :
+                        </div>
+                      ` :
                       ''}
+                  </div>
                 </div>
               </li>
             `)
@@ -653,16 +970,7 @@ function renderChat(ride) {
 
 function renderRideCard(ride, options = {}) {
   const {allowRequest = true} = options;
-  const isDriver = state.currentUser && ride.driverId === state.currentUser.id;
   const currentRequest = getCurrentUserRequest(ride);
-  const canRequest = allowRequest && state.currentUser && !isDriver &&
-      !currentRequest && ride.seatsLeft > 0;
-  const chatEnabled = userCanChat(ride);
-  const notes = String(ride.notes || '').trim();
-  const hasNotes = Boolean(notes);
-  const notesPreview = hasNotes ?
-      `${escapeHtml(notes.slice(0, 72))}${notes.length > 72 ? '...' : ''}` :
-      'No extra notes';
 
   return `
     <article class="ride-card" data-ride-id="${ride.id}">
@@ -674,27 +982,10 @@ function renderRideCard(ride, options = {}) {
       </div>
 
       <div class="card-grid">
-        <div>
+        <div class="ride-window-field">
           <strong>Window</strong>
-          <div class="meta">${formatDateTime(ride.startWindowStart)} - ${
-      formatDateTime(ride.startWindowEnd)}</div>
-        </div>
-        <div>
-          <strong>Car</strong>
-          <div class="meta">${escapeHtml(ride.car || '—')}</div>
-        </div>
-        <div>
-          <strong>Seats left</strong>
-          <div class="meta">${ride.seatsLeft} / ${ride.seatsTotal}</div>
-        </div>
-        <div>
-          <strong>Notes</strong>
-          <div class="meta ride-notes-preview">${notesPreview}</div>
-          ${
-      hasNotes ?
-          `<button type="button" class="button-secondary toggle-notes" data-notes="${
-              encodeURIComponent(notes)}">See all notes</button>` :
-          ''}
+          <div class="meta ride-window-meta">${
+      formatDateTimeRange(ride.startWindowStart, ride.startWindowEnd)}</div>
         </div>
       </div>
 
@@ -710,24 +1001,12 @@ function renderRideCard(ride, options = {}) {
                              '<span class="pill status-accepted">Open</span>'}
       </div>
 
-      <div class="actions">
-        <button type="button" class="refresh-rides button-secondary">Refresh</button>
+      <div class="actions ride-card-actions">
+        <button type="button" class="button-secondary open-ride-details" data-ride-id="${
+      ride.id}">See full ride details &#8663;</button>
       </div>
 
-      ${
-      canRequest ? `
-        <form class="request-form" data-request-ride-id="${ride.id}">
-          <label>
-            Optional message to the driver
-            <textarea name="message" rows="2" placeholder="Can I join this ride?"></textarea>
-          </label>
-          <button type="submit">Request seat</button>
-        </form>
-      ` :
-                   ''}
-
-      ${isDriver ? renderDriverRequests(ride) : ''}
-      ${chatEnabled ? renderChat(ride) : ''}
+      ${renderRideSeatAction(ride, {allowRequest})}
     </article>
   `;
 }
@@ -739,15 +1018,10 @@ async function handleRideActions(container, refresh) {
       return;
     }
 
-    const toggleNotesButton = event.target.closest('.toggle-notes');
-    if (toggleNotesButton) {
-      openNotesModal(decodeURIComponent(toggleNotesButton.dataset.notes || ''));
+    const rideDetailsButton = event.target.closest('.open-ride-details');
+    if (rideDetailsButton) {
+      await openRideDetailsModal(rideDetailsButton.dataset.rideId, refresh);
       return;
-    }
-
-    if (event.target.classList.contains('refresh-rides')) {
-      await refresh();
-      showToast('Ride list refreshed.');
     }
 
     if (event.target.classList.contains('manage-request')) {
@@ -763,6 +1037,16 @@ async function handleRideActions(container, refresh) {
       } catch (error) {
         showToast(error.message, 'error');
       }
+      return;
+    }
+
+    const leaveRideButton = event.target.closest('.leave-ride-button');
+    if (leaveRideButton) {
+      try {
+        await leaveRide(leaveRideButton.dataset.requestId, refresh);
+      } catch (error) {
+        showToast(error.message, 'error');
+      }
     }
   });
 
@@ -771,18 +1055,9 @@ async function handleRideActions(container, refresh) {
     if (requestForm) {
       event.preventDefault();
       const rideId = requestForm.dataset.requestRideId;
-      const formData = new FormData(requestForm);
-      const message = String(formData.get('message') || '').trim();
 
       try {
-        await api(`/api/rides/${rideId}/requests`, {
-          method: 'POST',
-          body: JSON.stringify({
-            message,
-          }),
-        });
-        await refresh();
-        showToast('Seat request sent.');
+        await requestSeatForRide(rideId, refresh);
       } catch (error) {
         showToast(error.message, 'error');
       }
@@ -1189,7 +1464,8 @@ async function setupMyRidesPage() {
         rides.filter((ride) => ride.driverId === state.currentUser.id);
     const passenger = rides.filter(
         (ride) => ride.requests.some(
-            (request) => request.passengerId === state.currentUser.id));
+            (request) => request.passengerId === state.currentUser.id &&
+                ['pending', 'accepted'].includes(request.status)));
 
     drivingContainer.innerHTML = driving.length ?
         driving.map((ride) => renderRideCard(ride, {allowRequest: false}))
@@ -1295,8 +1571,11 @@ function renderDebugUser(profile, rides) {
                     <strong>${escapeHtml(ride.startPoint)} → ${
                           escapeHtml(ride.endPoint)}</strong>
                     <span class="meta">${
-                          formatDateTime(ride.startWindowStart)} · Seats ${
-                          ride.seatsLeft}/${ride.seatsTotal}</span>
+                          formatDateTimeRange(
+                              ride.startWindowStart,
+                              ride.startWindowEnd,
+                              )} · Seats ${ride.seatsLeft}/${
+                          ride.seatsTotal}</span>
                   </li>
                 `).join('')}
             </ul>
@@ -1366,8 +1645,8 @@ function renderDebugRide(ride) {
         </div>
         <div>
           <strong>Window</strong>
-          <div class="meta">${formatDateTime(ride.startWindowStart)} - ${
-      formatDateTime(ride.startWindowEnd)}</div>
+          <div class="meta">${
+      formatDateTimeRange(ride.startWindowStart, ride.startWindowEnd)}</div>
         </div>
         <div>
           <strong>Car</strong>

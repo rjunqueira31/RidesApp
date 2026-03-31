@@ -20,6 +20,7 @@ const {
   requestLoggingMiddleware,
 } = require('./middleware/requestLogging');
 const {
+  cancelSeatRequest,
   createMessage,
   createProfile,
   createRide,
@@ -468,6 +469,27 @@ app.patch(
           requestId: request.params.requestId,
           actorId: request.currentUser.id,
           decision,
+          rideId: result.ride.id,
+        });
+        response.json(result);
+      } catch (error) {
+        next(error);
+      }
+    });
+
+app.delete(
+    '/api/requests/:requestId', requireAuth,
+    async (request, response, next) => {
+      try {
+        const result = await cancelSeatRequest({
+          requestId: request.params.requestId,
+          actorId: request.currentUser.id,
+        });
+
+        logger.info('seat_request.cancelled', {
+          ...requestLogContext(request),
+          requestId: request.params.requestId,
+          actorId: request.currentUser.id,
           rideId: result.ride.id,
         });
         response.json(result);

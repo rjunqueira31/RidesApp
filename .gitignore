@@ -4,4 +4,6 @@ data/db.local.json
 
 /src/generated/prisma
 
+src/local
+
 kanban

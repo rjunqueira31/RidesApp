@@ -528,15 +528,74 @@ async function updateSeatRequest({requestId, actorEmail, actorId, decision}) {
   };
 }
 
+async function cancelSeatRequest({requestId, actorEmail, actorId}) {
+  await purgeExpiredRides();
+
+  const request = await prisma.seatRequest.findUnique({
+    where: {
+      id: normalizeText(requestId),
+    },
+    include: {
+      ride: true,
+      passenger: true,
+    },
+  });
+
+  if (!request) {
+    throw new Error('Seat request not found.');
+  }
+
+  const actor = await resolveUser({
+    email: actorEmail,
+    userId: actorId,
+  });
+
+  if (!actor || request.passengerId !== actor.id) {
+    throw new Error('Only the passenger can leave this ride.');
+  }
+
+  if (![SeatRequestStatus.PENDING, SeatRequestStatus.ACCEPTED].includes(
+          request.status)) {
+    throw new Error('This ride request is no longer active.');
+  }
+
+  if (request.status === SeatRequestStatus.ACCEPTED) {
+    await prisma.$transaction([
+      prisma.ride.update({
+        where: {
+          id: request.rideId,
+        },
+        data: {
+          seatsLeft: {
+            increment: 1,
+          },
+        },
+      }),
+      prisma.seatRequest.delete({
+        where: {
+          id: request.id,
+        },
+      }),
+    ]);
+  } else {
+    await prisma.seatRequest.delete({
+      where: {
+        id: request.id,
+      },
+    });
+  }
+
+  return {
+    ride: await getRideById(request.rideId),
+  };
+}
+
 async function createMessage({rideId, senderEmail, senderId, text}) {
   await purgeExpiredRides();
 
   const ride = await prisma.ride.findUnique({
     where: {
       id: normalizeText(rideId),
-    },
-    include: {
-      requests: true,
     },
   });
 
@@ -551,16 +610,6 @@ async function createMessage({rideId, senderEmail, senderId, text}) {
 
   if (!sender) {
     throw new Error('Profile not found.');
-  }
-
-  const senderIsDriver = ride.driverId === sender.id;
-  const senderHasRequest =
-      ride.requests.some((request) => request.passengerId === sender.id && [
-        SeatRequestStatus.PENDING, SeatRequestStatus.ACCEPTED
-      ].includes(request.status));
-
-  if (!senderIsDriver && !senderHasRequest) {
-    throw new Error('You can only chat after joining the ride conversation.');
   }
 
   const message = await prisma.message.create({
@@ -581,6 +630,7 @@ async function createMessage({rideId, senderEmail, senderId, text}) {
 }
 
 module.exports = {
+  cancelSeatRequest,
   createMessage,
   createProfile,
   createRide,
