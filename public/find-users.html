@@ -1,42 +1,45 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Find users · MyRides</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css" />
-  </head>
-  <body data-page="find-users" class="app-body">
-    <div class="shell shell-wide">
-      <header class="app-topbar">
-        <a href="index.html" class="brand-link">MyRides</a>
-        <div class="topbar-user">
-          <span id="current-user-pill" class="user-pill"></span>
-          <a href="dashboard.html" class="nav-link">Dashboard</a>
-          <a href="profile.html" class="nav-link">Profile</a>
-          <button type="button" id="logout-button" class="button-secondary">Logout</button>
-        </div>
-      </header>
 
-      <main class="page-grid single-column">
-        <section class="panel-card">
-          <span class="eyebrow">Contact users</span>
-          <h1>Find users</h1>
-          <p class="section-copy">Search by name or email to quickly find who you need to contact.</p>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Find users · MyRides</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
 
-          <form id="find-users-form" class="toolbar search-toolbar user-search-toolbar">
-            <input type="text" name="query" placeholder="Search by name or email" />
-            <button type="button" id="reset-user-search" class="button-secondary">Reset</button>
-          </form>
+<body data-page="find-users" class="app-body">
+  <div class="shell shell-wide">
+    <header class="app-topbar">
+      <a href="index.html" class="brand-link">MyRides</a>
+      <div class="topbar-user">
+        <span id="current-user-pill" class="user-pill"></span>
+        <a href="dashboard.html" class="nav-link">Dashboard</a>
+        <a href="profile.html" class="nav-link">Profile</a>
+        <button type="button" id="logout-button" class="button-secondary">Logout</button>
+      </div>
+    </header>
 
-          <div id="users-results" class="user-results-grid"></div>
-        </section>
-      </main>
-    </div>
+    <main class="page-grid single-column">
+      <section class="panel-card">
+        <span class="eyebrow">Contact users</span>
+        <h1>Find users</h1>
+        <p class="section-copy">Search by name, email, or user ID to quickly find who you need to contact.</p>
 
-    <script src="app.js"></script>
-  </body>
+        <form id="find-users-form" class="toolbar search-toolbar user-search-toolbar">
+          <input type="text" name="query" placeholder="Search by name, email, or #A1B2C3" />
+          <button type="button" id="reset-user-search" class="button-secondary">Reset</button>
+        </form>
+
+        <div id="users-results" class="user-results-grid"></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+
 </html>

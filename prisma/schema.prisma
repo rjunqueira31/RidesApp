@@ -26,6 +26,7 @@ enum OfficeLocation {
 
 model User {
   id           String    @id @default(cuid())
+  publicId     String?   @unique
   name         String
   email        String    @unique
   passwordHash String

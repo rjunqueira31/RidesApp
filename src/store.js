@@ -1,17 +1,16 @@
-const {OfficeLocation, SeatRequestStatus, UserRole} = require('@prisma/client');
+const {randomInt} = require('crypto');
+const {OfficeLocation, Prisma, SeatRequestStatus, UserRole} =
+    require('@prisma/client');
 
 const prisma = require('./db');
 
 const EXPIRED_RIDE_RETENTION_MS = 2 * 60 * 60 * 1000;
+const PUBLIC_ID_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789';
 
 const OFFICE_LOCATION_VALUES = new Set(Object.values(OfficeLocation));
 
 function normalizeText(value) {
   return String(value || '').trim();
-}
-
-function normalizeEmail(value) {
-  return normalizeText(value).toLowerCase();
 }
 
 function toIsoString(value) {
@@ -34,6 +33,16 @@ function getManagerEmailSet() {
                      .filter(Boolean));
 }
 
+function generatePublicIdValue() {
+  let identifier = '#';
+
+  for (let index = 0; index < 6; index += 1) {
+    identifier += PUBLIC_ID_ALPHABET[randomInt(0, PUBLIC_ID_ALPHABET.length)];
+  }
+
+  return identifier;
+}
+
 function toPublicProfile(profile) {
   if (!profile) {
     return null;
@@ -41,6 +50,7 @@ function toPublicProfile(profile) {
 
   return {
     id: profile.id,
+    publicId: profile.publicId,
     name: profile.name,
     email: profile.email,
     phone: profile.phone,
@@ -142,7 +152,7 @@ async function purgeExpiredRides() {
 }
 
 async function getUserByEmail(email) {
-  const normalizedEmail = normalizeEmail(email);
+  const normalizedEmail = normalizeText(email).toLowerCase();
   if (!normalizedEmail) {
     return null;
   }
@@ -177,6 +187,7 @@ async function resolveUser({email, userId}) {
 
 async function getProfiles(searchQuery) {
   const query = normalizeText(searchQuery);
+  const publicIdQuery = query.replaceAll(' ', '');
   const where = query ? {
     OR: [
       {
@@ -188,6 +199,12 @@ async function getProfiles(searchQuery) {
       {
         email: {
           contains: query.toLowerCase(),
+          mode: 'insensitive',
+        },
+      },
+      {
+        publicId: {
+          contains: publicIdQuery,
           mode: 'insensitive',
         },
       },
@@ -215,7 +232,7 @@ async function getAuthUserByEmail(email) {
 }
 
 async function createProfile(profileInput) {
-  const email = normalizeEmail(profileInput.email);
+  const email = normalizeText(profileInput.email).toLowerCase();
   const existing = await getUserByEmail(email);
 
   if (existing) {
@@ -226,32 +243,49 @@ async function createProfile(profileInput) {
     throw new Error('Password hash is required.');
   }
 
-  const profile = await prisma.user.create({
-    data: {
-      name: normalizeText(profileInput.name),
-      email,
-      passwordHash: normalizeText(profileInput.passwordHash),
-      phone: normalizeText(profileInput.phone),
-      defaultCar: normalizeText(profileInput.defaultCar) || null,
-      defaultOffice: normalizeOfficeLocation(profileInput.defaultOffice),
-      defaultHome: normalizeText(profileInput.defaultHome) || null,
-      role: getManagerEmailSet().has(email) ? UserRole.MANAGER_USER :
-                                              UserRole.DEFAULT_USER,
-    },
-  });
+  for (let attempt = 0; attempt < 25; attempt += 1) {
+    const publicId = generatePublicIdValue();
 
-  return toPublicProfile(profile);
+    try {
+      const profile = await prisma.user.create({
+        data: {
+          publicId,
+          name: normalizeText(profileInput.name),
+          email,
+          passwordHash: normalizeText(profileInput.passwordHash),
+          phone: normalizeText(profileInput.phone),
+          defaultCar: normalizeText(profileInput.defaultCar) || null,
+          defaultOffice: normalizeOfficeLocation(profileInput.defaultOffice),
+          defaultHome: normalizeText(profileInput.defaultHome) || null,
+          role: getManagerEmailSet().has(email) ? UserRole.MANAGER_USER :
+                                                  UserRole.DEFAULT_USER,
+        },
+      });
+
+      return toPublicProfile(profile);
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2002' && Array.isArray(error.meta?.target) &&
+          error.meta.target.includes('publicId')) {
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  throw new Error('Unable to generate a unique user ID. Please try again.');
 }
 
 async function updateProfile(currentEmail, profileInput) {
-  const normalizedCurrentEmail = normalizeEmail(currentEmail);
+  const normalizedCurrentEmail = normalizeText(currentEmail).toLowerCase();
   const existing = await getUserByEmail(normalizedCurrentEmail);
 
   if (!existing) {
     throw new Error('Profile not found.');
   }
 
-  const nextEmail = normalizeEmail(profileInput.email);
+  const nextEmail = normalizeText(profileInput.email).toLowerCase();
   const emailOwner = await getUserByEmail(nextEmail);
 
   if (emailOwner && emailOwner.id !== existing.id) {

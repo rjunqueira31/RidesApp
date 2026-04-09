@@ -973,21 +973,13 @@ function renderUserSearchCard(profile) {
     <article class="user-card">
       <div class="user-card-header">
         <div>
-          <h2>${escapeHtml(profile.name || 'Unnamed user')}</h2>
-          <p class="meta">${escapeHtml(profile.email)}</p>
+          <h2>${
+      escapeHtml(profile.name || 'Unnamed user')} <span class="meta">- ${
+      escapeHtml(profile.publicId || '—')}</span></h2>
         </div>
       </div>
-      <div class="user-card-grid">
-        <div>
-          <strong>Phone</strong>
-          <div class="meta">${escapeHtml(profile.phone || '—')}</div>
-        </div>
-        <div>
-          <strong>Default office</strong>
-          <div class="meta">${
-      escapeHtml(formatOfficeLocation(profile.defaultOffice) || '—')}</div>
-        </div>
-      </div>
+      <p class="meta"><strong>Default office:</strong> ${
+      escapeHtml(formatOfficeLocation(profile.defaultOffice) || '—')}</p>
     </article>
   `;
 }
