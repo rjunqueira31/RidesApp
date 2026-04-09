@@ -25,6 +25,8 @@ const OFFICE_LOCATION_LABELS = {
 const PENDING_TOAST_KEY = 'ridesapp.pendingToast';
 const PROFILE_RETURN_PATH_KEY = 'ridesapp.profileReturnPath';
 const CREATE_RIDE_RETURN_PATH_KEY = 'ridesapp.createRideReturnPath';
+const PASSWORD_REQUIREMENTS_MESSAGE =
+    'Password must be at least 8 characters long.';
 
 function userIsManager() {
   return state.currentUser?.role === 'MANAGER_USER';
@@ -37,6 +39,11 @@ function escapeHtml(value) {
       .replaceAll('>', '&gt;')
       .replaceAll('"', '&quot;')
       .replaceAll('\'', '&#039;');
+}
+
+function isStrongPassword(password) {
+  const value = String(password || '');
+  return value.length >= 8;
 }
 
 async function api(path, options = {}) {
@@ -365,15 +372,8 @@ function syncRideTimeConstraints(dateInput, startTimeInput, endTimeInput) {
     }
   }
 
-  const minEndTime = addMinutesToTime(startTimeInput.value, 15);
-  endTimeInput.min = minEndTime;
-
-  if (!endTimeInput.value || endTimeInput.value <= startTimeInput.value) {
+  if (!endTimeInput.value) {
     endTimeInput.value = addMinutesToTime(startTimeInput.value, 60);
-  }
-
-  if (endTimeInput.value < minEndTime) {
-    endTimeInput.value = minEndTime;
   }
 }
 
@@ -1126,9 +1126,19 @@ async function setupSignupPage() {
   }
 
   const officeSelect = document.querySelector('select[name="defaultOffice"]');
+  const passwordInput = document.querySelector('input[name="password"]');
   syncSelectPlaceholderState(officeSelect);
   officeSelect?.addEventListener('change', () => {
     syncSelectPlaceholderState(officeSelect);
+  });
+
+  passwordInput?.addEventListener('input', () => {
+    if (!passwordInput.value || isStrongPassword(passwordInput.value)) {
+      passwordInput.setCustomValidity('');
+      return;
+    }
+
+    passwordInput.setCustomValidity(PASSWORD_REQUIREMENTS_MESSAGE);
   });
 
   document.querySelector('#signup-form')
@@ -1136,6 +1146,15 @@ async function setupSignupPage() {
         event.preventDefault();
         const formData = new FormData(event.currentTarget);
         const profile = Object.fromEntries(formData.entries());
+
+        if (!isStrongPassword(profile.password)) {
+          passwordInput?.setCustomValidity(PASSWORD_REQUIREMENTS_MESSAGE);
+          passwordInput?.reportValidity();
+          setFeedback(PASSWORD_REQUIREMENTS_MESSAGE, true);
+          return;
+        }
+
+        passwordInput?.setCustomValidity('');
 
         try {
           const payload = await api('/api/auth/signup', {

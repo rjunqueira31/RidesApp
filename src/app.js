@@ -53,6 +53,16 @@ function assertRequired(value, label) {
   }
 }
 
+function validatePasswordFormat(password) {
+  const value = String(password || '');
+
+  if (value.length < 8) {
+    const error = new Error('Password must be at least 8 characters long.');
+    error.status = 400;
+    throw error;
+  }
+}
+
 function parseDateTime(value, label) {
   const parsed = new Date(value);
 
@@ -165,6 +175,7 @@ app.post('/api/auth/signup', authRateLimit, async (request, response, next) => {
     assertRequired(email, 'Email');
     assertRequired(password, 'Password');
     assertRequired(phone, 'Phone number');
+    validatePasswordFormat(password);
 
     const passwordHash = await bcrypt.hash(String(password), 12);
     const profile = await createProfile({
