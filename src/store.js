@@ -277,6 +277,60 @@ async function updateProfile(currentEmail, profileInput) {
   return toPublicProfile(updatedProfile);
 }
 
+async function deleteProfileAccount({email, userId}) {
+  const profile = await resolveUser({email, userId});
+
+  if (!profile) {
+    throw new Error('Profile not found.');
+  }
+
+  await prisma.$transaction(async (transaction) => {
+    const acceptedJoinedRequests = await transaction.seatRequest.findMany({
+      where: {
+        passengerId: profile.id,
+        status: SeatRequestStatus.ACCEPTED,
+        ride: {
+          driverId: {
+            not: profile.id,
+          },
+        },
+      },
+      select: {
+        rideId: true,
+      },
+    });
+
+    const rideIdsToRestore =
+        [...new Set(acceptedJoinedRequests.map((request) => request.rideId))];
+
+    if (rideIdsToRestore.length) {
+      await transaction.ride.updateMany({
+        where: {
+          id: {
+            in : rideIdsToRestore,
+          },
+        },
+        data: {
+          seatsLeft: {
+            increment: 1,
+          },
+        },
+      });
+    }
+
+    await transaction.user.delete({
+      where: {
+        id: profile.id,
+      },
+    });
+  });
+
+  return {
+    profileId: profile.id,
+    email: profile.email,
+  };
+}
+
 async function listRides(filters = {}) {
   await purgeExpiredRides();
 
@@ -639,6 +693,7 @@ module.exports = {
   createProfile,
   createRide,
   createSeatRequest,
+  deleteProfileAccount,
   getAuthUserByEmail,
   getProfileById,
   getProfiles,

@@ -25,6 +25,7 @@ const {
   createProfile,
   createRide,
   createSeatRequest,
+  deleteProfileAccount,
   getAuthUserByEmail,
   getProfileById,
   getProfiles,
@@ -333,6 +334,32 @@ app.patch(
         next(error);
       }
     });
+
+app.delete('/api/profile', requireAuth, async (request, response, next) => {
+  try {
+    const result = await deleteProfileAccount({
+      userId: request.currentUser.id,
+    });
+
+    logger.info('profile.deleted', {
+      ...requestLogContext(request),
+      profileId: result.profileId,
+      email: result.email,
+    });
+
+    request.session.destroy((sessionError) => {
+      if (sessionError) {
+        next(sessionError);
+        return;
+      }
+
+      response.clearCookie('connect.sid');
+      response.json({ok: true});
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 app.get('/api/rides', requireAuth, async (request, response, next) => {
   try {

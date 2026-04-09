@@ -551,6 +551,34 @@ textarea::placeholder {
   display: none;
 }
 
+.danger-zone {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 0.9rem;
+}
+
+.danger-zone-title {
+  margin: 0;
+  color: #b42318;
+}
+
+.danger-zone-copy {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.danger-button {
+  justify-self: start;
+  background: linear-gradient(135deg, #8c1023, #df4a5f);
+}
+
+.danger-button:hover {
+  box-shadow: 0 14px 24px rgba(140, 16, 35, 0.24);
+}
+
 .toast-container {
   position: fixed;
   inset: 0;

@@ -803,6 +803,69 @@ function ensureRideCreatedModal() {
   return modal;
 }
 
+function deleteCurrentAccount() {
+  return api('/api/profile', {
+    method: 'DELETE',
+  });
+}
+
+function ensureDeleteAccountModal() {
+  let modal = document.querySelector('#delete-account-modal');
+  if (modal) {
+    return modal;
+  }
+
+  document.body.insertAdjacentHTML('beforeend', `
+    <div id="delete-account-modal" class="notes-modal" hidden>
+      <div class="notes-modal-backdrop" data-dismiss-delete-account-modal="true"></div>
+      <div class="notes-modal-panel ride-created-modal-panel" role="dialog" aria-modal="true" aria-labelledby="delete-account-modal-title">
+        <div class="notes-modal-header">
+          <h2 id="delete-account-modal-title">Delete account</h2>
+        </div>
+        <p class="ride-created-copy">Once you delete your account, there is no going back. This will remove your profile, your published rides, and your joined rides.</p>
+        <div class="ride-created-actions">
+          <button type="button" class="button-secondary" data-dismiss-delete-account-modal="true">Cancel</button>
+          <button type="button" id="delete-account-confirm-button" class="danger-button">Delete account</button>
+        </div>
+      </div>
+    </div>
+  `);
+
+  modal = document.querySelector('#delete-account-modal');
+  modal.addEventListener('click', async (event) => {
+    if (event.target.closest('[data-dismiss-delete-account-modal="true"]')) {
+      modal.hidden = true;
+      return;
+    }
+
+    const confirmButton =
+        event.target.closest('#delete-account-confirm-button');
+    if (!confirmButton) {
+      return;
+    }
+
+    try {
+      confirmButton.disabled = true;
+      await deleteCurrentAccount();
+      state.currentUser = null;
+      redirectTo('index.html');
+    } catch (error) {
+      setFeedback(error.message, true);
+      confirmButton.disabled = false;
+    }
+  });
+
+  return modal;
+}
+
+function openDeleteAccountModal() {
+  const modal = ensureDeleteAccountModal();
+  const confirmButton = modal.querySelector('#delete-account-confirm-button');
+
+  confirmButton.disabled = false;
+  modal.hidden = false;
+}
+
 function openRideCreatedModal(ride) {
   const modal = ensureRideCreatedModal();
   const summary = modal.querySelector('#ride-created-summary');
@@ -1881,6 +1944,7 @@ async function setupDebugPage() {
 
 async function setupProfilePage() {
   const form = document.querySelector('#profile-update-form');
+  const deleteAccountButton = document.querySelector('#delete-account-button');
   form.elements.name.value = state.currentUser.name || '';
   form.elements.email.value = state.currentUser.email || '';
   form.elements.phone.value = state.currentUser.phone || '';
@@ -1913,6 +1977,10 @@ async function setupProfilePage() {
     } catch (error) {
       setFeedback(error.message, true);
     }
+  });
+
+  deleteAccountButton?.addEventListener('click', async () => {
+    openDeleteAccountModal();
   });
 }
 
