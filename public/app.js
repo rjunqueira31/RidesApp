@@ -418,6 +418,7 @@ function openNotesModal(notesText) {
 }
 
 let activeRideDetailsRefresh = null;
+let pendingRidePublish = null;
 
 function ensureRideDetailsModal() {
   let modal = document.querySelector('#ride-details-modal');
@@ -639,6 +640,110 @@ async function leaveRide(requestId, refresh) {
   showToast('You left the ride.');
 }
 
+function renderRideSummaryMarkup(ride, options = {}) {
+  const {
+    emptyCarLabel = 'No car specified',
+    emptyNotesLabel = 'No notes added.',
+    showNotes = false,
+  } = options;
+  const carLabel = String(ride.car || '').trim() || emptyCarLabel;
+  const notes = String(ride.notes || '').trim();
+
+  return `
+    <div class="ride-created-route">${escapeHtml(ride.startPoint)} to ${
+      escapeHtml(ride.endPoint)}</div>
+    <div class="ride-created-meta">${
+      escapeHtml(formatDateTimeRange(
+          ride.startWindowStart, ride.startWindowEnd))}</div>
+    <div class="ride-created-meta">${escapeHtml(carLabel)} · ${
+      escapeHtml(ride.seatsTotal)} seat${
+      Number(ride.seatsTotal) === 1 ? '' : 's'}</div>
+    ${
+      showNotes ? `<div class="ride-created-meta">Notes: ${
+                      escapeHtml(notes || emptyNotesLabel)}</div>` :
+                  ''}
+  `;
+}
+
+function ensureRideConfirmModal() {
+  let modal = document.querySelector('#ride-confirm-modal');
+  if (modal) {
+    return modal;
+  }
+
+  document.body.insertAdjacentHTML('beforeend', `
+    <div id="ride-confirm-modal" class="notes-modal" hidden>
+      <div class="notes-modal-backdrop" data-dismiss-ride-confirm-modal="true"></div>
+      <div class="notes-modal-panel ride-created-modal-panel" role="dialog" aria-modal="true" aria-labelledby="ride-confirm-modal-title">
+        <div class="notes-modal-header">
+          <h2 id="ride-confirm-modal-title">Confirm your ride details</h2>
+          <button type="button" class="button-secondary notes-modal-close" data-dismiss-ride-confirm-modal="true" aria-label="Close ride confirmation">Close</button>
+        </div>
+        <p class="ride-created-copy">Review the details below. Your ride will only be published after you confirm.</p>
+        <div id="ride-confirm-summary" class="ride-created-summary"></div>
+        <div class="ride-created-actions">
+          <button type="button" class="button-secondary" data-dismiss-ride-confirm-modal="true">Edit ride</button>
+          <button type="button" id="ride-confirm-submit">Confirm and publish</button>
+        </div>
+      </div>
+    </div>
+  `);
+
+  modal = document.querySelector('#ride-confirm-modal');
+  modal.addEventListener('click', async (event) => {
+    if (event.target.closest('[data-dismiss-ride-confirm-modal="true"]')) {
+      modal.hidden = true;
+      return;
+    }
+
+    const confirmButton = event.target.closest('#ride-confirm-submit');
+    if (!confirmButton || !pendingRidePublish) {
+      return;
+    }
+
+    const {ride, form, carInput, dateInput, startTimeInput, endTimeInput} =
+        pendingRidePublish;
+
+    try {
+      confirmButton.disabled = true;
+      const payload = await api('/api/rides', {
+        method: 'POST',
+        body: JSON.stringify(ride),
+      });
+
+      form.reset();
+      carInput.value = state.currentUser.defaultCar || '';
+      applyUserRouteDefaults(form);
+      dateInput.value = formatDateForInput(new Date());
+      startTimeInput.value =
+          formatTimeForInput(roundUpToNextMinute(new Date()));
+      endTimeInput.value = addMinutesToTime(startTimeInput.value, 60);
+      syncRideTimeConstraints(dateInput, startTimeInput, endTimeInput);
+      pendingRidePublish = null;
+      modal.hidden = true;
+      openRideCreatedModal(payload.ride);
+    } catch (error) {
+      setFeedback(error.message, true);
+      confirmButton.disabled = false;
+    }
+  });
+
+  return modal;
+}
+
+function openRideConfirmModal(pendingRide) {
+  const modal = ensureRideConfirmModal();
+  const summary = modal.querySelector('#ride-confirm-summary');
+  const confirmButton = modal.querySelector('#ride-confirm-submit');
+
+  pendingRidePublish = pendingRide;
+  summary.innerHTML = renderRideSummaryMarkup(pendingRide.ride, {
+    showNotes: true,
+  });
+  confirmButton.disabled = false;
+  modal.hidden = false;
+}
+
 function ensureRideCreatedModal() {
   let modal = document.querySelector('#ride-created-modal');
   if (modal) {
@@ -687,18 +792,8 @@ function ensureRideCreatedModal() {
 function openRideCreatedModal(ride) {
   const modal = ensureRideCreatedModal();
   const summary = modal.querySelector('#ride-created-summary');
-  const carLabel = String(ride.car || '').trim() || 'No car specified';
 
-  summary.innerHTML = `
-    <div class="ride-created-route">${escapeHtml(ride.startPoint)} to ${
-      escapeHtml(ride.endPoint)}</div>
-    <div class="ride-created-meta">${
-      escapeHtml(formatDateTimeRange(
-          ride.startWindowStart, ride.startWindowEnd))}</div>
-    <div class="ride-created-meta">${escapeHtml(carLabel)} · ${
-      escapeHtml(ride.seatsTotal)} seat${
-      Number(ride.seatsTotal) === 1 ? '' : 's'}</div>
-  `;
+  summary.innerHTML = renderRideSummaryMarkup(ride);
 
   modal.hidden = false;
 }
@@ -1351,19 +1446,14 @@ async function setupCreateRidePage() {
       ride.startWindowStart = startWindowStart;
       ride.startWindowEnd = startWindowEnd;
 
-      const payload = await api('/api/rides', {
-        method: 'POST',
-        body: JSON.stringify(ride),
+      openRideConfirmModal({
+        ride,
+        form,
+        carInput,
+        dateInput,
+        startTimeInput,
+        endTimeInput,
       });
-      form.reset();
-      carInput.value = state.currentUser.defaultCar || '';
-      applyUserRouteDefaults(form);
-      dateInput.value = formatDateForInput(new Date());
-      startTimeInput.value =
-          formatTimeForInput(roundUpToNextMinute(new Date()));
-      endTimeInput.value = addMinutesToTime(startTimeInput.value, 60);
-      syncRideTimeConstraints(dateInput, startTimeInput, endTimeInput);
-      openRideCreatedModal(payload.ride);
     } catch (error) {
       setFeedback(error.message, true);
     }
