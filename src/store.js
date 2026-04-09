@@ -550,8 +550,12 @@ async function cancelSeatRequest({requestId, actorEmail, actorId}) {
     userId: actorId,
   });
 
-  if (!actor || request.passengerId !== actor.id) {
-    throw new Error('Only the passenger can leave this ride.');
+  const isPassenger = actor && request.passengerId === actor.id;
+  const isDriver = actor && request.ride.driverId === actor.id;
+
+  if (!isPassenger && !isDriver) {
+    throw new Error(
+        'Only the passenger or driver can remove this ride request.');
   }
 
   if (![SeatRequestStatus.PENDING, SeatRequestStatus.ACCEPTED].includes(

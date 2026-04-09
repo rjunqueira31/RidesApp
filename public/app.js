@@ -467,6 +467,20 @@ function ensureRideDetailsModal() {
     }
 
     try {
+      const removePassengerButton =
+          event.target.closest('.remove-passenger-button');
+      if (removePassengerButton) {
+        await api(`/api/requests/${removePassengerButton.dataset.requestId}`, {
+          method: 'DELETE',
+        });
+        await refreshRideDetailsModal();
+        if (activeRideDetailsRefresh) {
+          await activeRideDetailsRefresh();
+        }
+        showToast('Passenger removed from ride.');
+        return;
+      }
+
       const leaveRideButton = event.target.closest('.leave-ride-button');
       if (!leaveRideButton) {
         return;
@@ -1016,6 +1030,13 @@ function renderDriverRequests(ride) {
                           request.id}" data-decision="accepted">Accept</button>
                           <button type="button" class="manage-request button-secondary" data-request-id="${
                           request.id}" data-decision="declined">Decline</button>
+                        </div>
+                      ` :
+                      request.status === 'accepted' ?
+                      `
+                        <div class="actions">
+                          <button type="button" class="remove-passenger-button button-secondary" data-request-id="${
+                          request.id}">Remove</button>
                         </div>
                       ` :
                       ''}
