@@ -1,81 +1,129 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Create ride · MyRides</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css" />
-  </head>
-  <body data-page="create-ride" class="app-body">
-    <div class="shell shell-wide">
-      <header class="app-topbar">
-        <a href="index.html" class="brand-link">MyRides</a>
-        <div class="topbar-user">
-          <span id="current-user-pill" class="user-pill"></span>
-          <a href="dashboard.html" class="nav-link">Dashboard</a>
-          <a href="profile.html" class="nav-link">Profile</a>
-          <button type="button" id="logout-button" class="button-secondary">Logout</button>
-        </div>
-      </header>
 
-      <main class="page-grid single-column">
-        <section class="panel-card">
-          <span class="eyebrow">Driver action</span>
-          <h1>Create a ride</h1>
-          <p class="section-copy">Publish a ride for colleagues to find and request.</p>
-          <div id="page-feedback" class="feedback" aria-live="polite"></div>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Create ride · MyRides</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.css" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
 
-          <form id="ride-form" class="stack-form two-column-form">
-            <div class="route-fields full-width">
-              <label>
-                Start point <span class="label-required" aria-hidden="true">*</span>
-                <input type="text" name="startPoint" placeholder="Sintra" required />
-              </label>
-              <button type="button" id="swap-route-button" class="button-secondary route-swap-button" aria-label="Swap start and end points" title="Swap start and end points">
-                <span aria-hidden="true">⇄</span>
-              </button>
-              <label>
-                End point <span class="label-required" aria-hidden="true">*</span>
-                <input type="text" name="endPoint" placeholder="Lisbon Office" required />
-              </label>
-            </div>
-            <div class="schedule-fields full-width">
-              <label>
-                Ride date <span class="label-required" aria-hidden="true">*</span>
-                <input type="date" name="rideDate" required />
-              </label>
-              <div class="schedule-time-fields">
-                <label>
-                  Earliest departure <span class="label-required" aria-hidden="true">*</span>
-                  <input type="time" name="startTime" required step="60" lang="en-GB" />
-                </label>
-                <label>
-                  Latest departure <span class="label-required" aria-hidden="true">*</span>
-                  <input type="time" name="endTime" required step="60" lang="en-GB" />
-                </label>
+<body data-page="create-ride" class="app-body">
+  <div class="shell shell-wide">
+    <header class="app-topbar">
+      <a href="index.html" class="brand-link">MyRides</a>
+      <div class="topbar-user">
+        <span id="current-user-pill" class="user-pill"></span>
+        <a href="dashboard.html" class="nav-link">Dashboard</a>
+        <a href="profile.html" class="nav-link">Profile</a>
+        <button type="button" id="logout-button" class="button-secondary">Logout</button>
+      </div>
+    </header>
+
+    <main class="page-grid single-column">
+      <section class="panel-card">
+        <span class="eyebrow">Driver action</span>
+        <h1>Create a ride</h1>
+        <p class="section-copy">Publish a ride for colleagues to find and request.</p>
+        <div id="page-feedback" class="feedback" aria-live="polite"></div>
+
+        <form id="ride-form" class="stack-form two-column-form">
+          <div class="route-fields full-width">
+            <label>
+              Start point <span class="label-required" aria-hidden="true">*</span>
+              <div class="location-field-row">
+                <input type="text" name="startPointDisplay" placeholder="Sintra" autocomplete="off" required />
+                <input type="hidden" name="startPoint" />
+                <button type="button" class="button-secondary location-map-trigger" data-location-target="startPoint"
+                  data-location-label="start point" aria-label="Choose start point on the map">
+                  <img src="images/icon_map.svg" alt="" />
+                </button>
               </div>
+            </label>
+            <button type="button" id="swap-route-button" class="button-secondary route-swap-button"
+              aria-label="Swap start and end points" title="Swap start and end points">
+              <span aria-hidden="true">⇄</span>
+            </button>
+            <label class="endpoint-label">
+              <span class="field-label-row">
+                <span>End point <span class="label-required" aria-hidden="true">*</span></span>
+                <button type="button" id="toggle-office-picker-button" class="field-inline-action" aria-expanded="false"
+                  aria-controls="office-picker-panel">
+                  See all offices
+                </button>
+              </span>
+              <div id="office-picker-panel" class="office-picker-panel" hidden>
+                <div class="office-picker-header">
+                  <strong>Choose office</strong>
+                  <button type="button" id="close-office-picker-button" class="office-picker-close"
+                    aria-label="Close office list">
+                    ×
+                  </button>
+                </div>
+                <button type="button" class="office-picker-option" data-office-location="LISBON">
+                  <span class="office-picker-option-title">Lisbon office</span>
+                  <span class="office-picker-option-meta">Avenida Aquilino Ribeiro Machado 8</span>
+                </button>
+                <button type="button" class="office-picker-option" data-office-location="PORTO">
+                  <span class="office-picker-option-title">Porto office</span>
+                  <span class="office-picker-option-meta">Rua Dr. António Luis Gomes 10</span>
+                </button>
+                <button type="button" class="office-picker-option" data-office-location="BRAGA">
+                  <span class="office-picker-option-title">Braga office</span>
+                  <span class="office-picker-option-meta">Avenida Dom Joao II 374</span>
+                </button>
+              </div>
+              <div class="location-field-row">
+                <input type="text" name="endPointDisplay" placeholder="Lisbon Office" autocomplete="off" required />
+                <input type="hidden" name="endPoint" />
+                <button type="button" class="button-secondary location-map-trigger" data-location-target="endPoint"
+                  data-location-label="end point" aria-label="Choose end point on the map">
+                  <img src="images/icon_map.svg" alt="" />
+                </button>
+              </div>
+            </label>
+          </div>
+          <div class="schedule-fields full-width">
+            <label>
+              Ride date <span class="label-required" aria-hidden="true">*</span>
+              <input type="date" name="rideDate" required />
+            </label>
+            <div class="schedule-time-fields">
+              <label>
+                Earliest departure <span class="label-required" aria-hidden="true">*</span>
+                <input type="time" name="startTime" required step="60" lang="en-GB" />
+              </label>
+              <label>
+                Latest departure <span class="label-required" aria-hidden="true">*</span>
+                <input type="time" name="endTime" required step="60" lang="en-GB" />
+              </label>
             </div>
-            <label>
-              Car <span class="label-optional">(optional)</span>
-              <input type="text" name="car" placeholder="BMW i4" />
-            </label>
-            <label>
-              Seats available <span class="label-required" aria-hidden="true">*</span>
-              <input type="number" name="seatsTotal" min="1" max="8" value="4" required />
-            </label>
-            <label class="full-width">
-              Notes <span class="label-optional">(optional)</span>
-              <textarea name="notes" rows="4" placeholder="Pickup near the train station at 08:00.&#10;Going through Ponte Vasco da Gama"></textarea>
-            </label>
-            <button type="submit" class="full-width">Publish ride</button>
-          </form>
-        </section>
-      </main>
-    </div>
+          </div>
+          <label>
+            Car <span class="label-optional">(optional)</span>
+            <input type="text" name="car" placeholder="BMW i4" />
+          </label>
+          <label>
+            Seats available <span class="label-required" aria-hidden="true">*</span>
+            <input type="number" name="seatsTotal" min="1" max="8" value="4" required />
+          </label>
+          <label class="full-width">
+            Notes <span class="label-optional">(optional)</span>
+            <textarea name="notes" rows="4"
+              placeholder="Pickup near the train station at 08:00.&#10;Going through Ponte Vasco da Gama"></textarea>
+          </label>
+          <button type="submit" class="full-width">Publish ride</button>
+        </form>
+      </section>
+    </main>
+  </div>
 
-    <script src="app.js"></script>
-  </body>
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.js"></script>
+  <script src="app.js"></script>
+</body>
+
 </html>

@@ -56,7 +56,7 @@ function toPublicProfile(profile) {
     phone: profile.phone,
     defaultCar: profile.defaultCar || '',
     defaultOffice: profile.defaultOffice || '',
-    defaultHome: profile.defaultHome || '',
+    defaultStartingLocation: profile.defaultStartingLocation || '',
     role: profile.role,
     createdAt: toIsoString(profile.createdAt),
     updatedAt: toIsoString(profile.updatedAt),
@@ -256,7 +256,8 @@ async function createProfile(profileInput) {
           phone: normalizeText(profileInput.phone),
           defaultCar: normalizeText(profileInput.defaultCar) || null,
           defaultOffice: normalizeOfficeLocation(profileInput.defaultOffice),
-          defaultHome: normalizeText(profileInput.defaultHome) || null,
+          defaultStartingLocation:
+              normalizeText(profileInput.defaultStartingLocation) || null,
           role: getManagerEmailSet().has(email) ? UserRole.MANAGER_USER :
                                                   UserRole.DEFAULT_USER,
         },
@@ -302,7 +303,8 @@ async function updateProfile(currentEmail, profileInput) {
       phone: normalizeText(profileInput.phone),
       defaultCar: normalizeText(profileInput.defaultCar) || null,
       defaultOffice: normalizeOfficeLocation(profileInput.defaultOffice),
-      defaultHome: normalizeText(profileInput.defaultHome) || null,
+      defaultStartingLocation:
+          normalizeText(profileInput.defaultStartingLocation) || null,
       role: getManagerEmailSet().has(nextEmail) ? UserRole.MANAGER_USER :
                                                   UserRole.DEFAULT_USER,
     },

@@ -8,11 +8,12 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.css" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 
 <body data-page="profile" class="app-body">
-  <div class="shell shell-narrow">
+  <div class="shell shell-wide">
     <header class="app-topbar">
       <a href="index.html" class="brand-link">MyRides</a>
       <div class="topbar-user">
@@ -47,8 +48,16 @@
             <input type="text" name="defaultCar" />
           </label>
           <label>
-            Default home location <span class="label-optional">(optional)</span>
-            <input type="text" name="defaultHome" />
+            Default starting location <span class="label-optional">(optional)</span>
+            <div class="location-field-row">
+              <input type="text" name="defaultStartingLocationDisplay" autocomplete="off" />
+              <input type="hidden" name="defaultStartingLocation" />
+              <button type="button" class="button-secondary location-map-trigger"
+                data-location-target="defaultStartingLocation" data-location-label="starting location"
+                aria-label="Choose starting location on the map">
+                <img src="images/icon_map.svg" alt="" />
+              </button>
+            </div>
           </label>
           <label>
             Default office <span class="label-optional">(optional)</span>
@@ -72,6 +81,7 @@
     </main>
   </div>
 
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.js"></script>
   <script src="app.js"></script>
 </body>
 

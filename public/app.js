@@ -6,6 +6,8 @@ const protectedPages = new Set([
 
 const state = {
   currentUser: null,
+  clientConfig: null,
+  clientConfigPromise: null,
   profiles: [],
   rides: [],
   filters: {
@@ -16,11 +18,27 @@ const state = {
   },
 };
 
-const OFFICE_LOCATION_LABELS = {
-  LISBON: 'Lisbon',
-  PORTO: 'Porto',
-  BRAGA: 'Braga',
+const OFFICE_LOCATIONS = {
+  LISBON: {
+    label: 'Lisbon',
+    address:
+        'Avenida Aquilino Ribeiro Machado 8, 1800-142 Lisboa, Lisboa, Portugal',
+  },
+  PORTO: {
+    label: 'Porto',
+    address: 'Rua Dr. António Luis Gomes 10, 4000-091 Porto',
+  },
+  BRAGA: {
+    label: 'Braga',
+    address: 'Avenida Dom Joao II 374, 4715-275 Braga',
+  },
 };
+const DEFAULT_MAPBOX_PROXIMITY = {
+  longitude: -9.1393,
+  latitude: 38.7223,
+};
+const DEFAULT_LOCATION_MAP_CENTER = [-9.1393, 38.7223];
+const DEFAULT_LOCATION_MAP_ZOOM = 10.8;
 
 const PENDING_TOAST_KEY = 'ridesapp.pendingToast';
 const PROFILE_RETURN_PATH_KEY = 'ridesapp.profileReturnPath';
@@ -205,6 +223,315 @@ async function loadCurrentUser() {
     state.currentUser = null;
     return null;
   }
+}
+
+async function loadClientConfig() {
+  if (state.clientConfig) {
+    return state.clientConfig;
+  }
+
+  if (!state.clientConfigPromise) {
+    state.clientConfigPromise = api('/api/client-config')
+                                    .then((payload) => {
+                                      state.clientConfig = payload;
+                                      return payload;
+                                    })
+                                    .finally(() => {
+                                      state.clientConfigPromise = null;
+                                    });
+  }
+
+  return state.clientConfigPromise;
+}
+
+async function fetchMapboxLocationSuggestions(query, signal) {
+  const config = await loadClientConfig();
+  const token = String(config?.mapboxPublicToken || '').trim();
+
+  if (!token) {
+    throw new Error('Mapbox token is missing.');
+  }
+
+  if (query.trim().length < 3) {
+    return [];
+  }
+
+  const params = new URLSearchParams({
+    access_token: token,
+    autocomplete: 'true',
+    limit: '5',
+    language: 'pt',
+    proximity: `${DEFAULT_MAPBOX_PROXIMITY.longitude},${
+        DEFAULT_MAPBOX_PROXIMITY.latitude}`,
+    types: 'place,address,poi,locality,neighborhood,region',
+  });
+
+  const response = await fetch(
+      `https://api.mapbox.com/geocoding/v5/mapbox.places/${
+          encodeURIComponent(query)}.json?${params.toString()}`,
+      {signal});
+
+  if (!response.ok) {
+    throw new Error('Unable to load location suggestions.');
+  }
+
+  const payload = await response.json();
+  return (payload.features || [])
+      .map((feature) => ({
+             id: feature.id,
+             name: feature.text || feature.place_name || '',
+             label: feature.place_name || feature.text || '',
+           }));
+}
+
+async function fetchMapboxLocationFeature(query, signal) {
+  const config = await loadClientConfig();
+  const token = String(config?.mapboxPublicToken || '').trim();
+
+  if (!token) {
+    throw new Error('Mapbox token is missing.');
+  }
+
+  const trimmedQuery = String(query || '').trim();
+  if (!trimmedQuery) {
+    return null;
+  }
+
+  const params = new URLSearchParams({
+    access_token: token,
+    autocomplete: 'false',
+    limit: '1',
+    language: 'pt',
+    proximity: `${DEFAULT_MAPBOX_PROXIMITY.longitude},${
+        DEFAULT_MAPBOX_PROXIMITY.latitude}`,
+    types: 'address,poi,place,locality,neighborhood,region',
+  });
+
+  const response = await fetch(
+      `https://api.mapbox.com/geocoding/v5/mapbox.places/${
+          encodeURIComponent(trimmedQuery)}.json?${params.toString()}`,
+      {signal});
+
+  if (!response.ok) {
+    throw new Error('Unable to find that location on the map.');
+  }
+
+  const payload = await response.json();
+  return payload.features?.[0] || null;
+}
+
+async function reverseGeocodeMapboxLocation(longitude, latitude, signal) {
+  const config = await loadClientConfig();
+  const token = String(config?.mapboxPublicToken || '').trim();
+
+  if (!token) {
+    throw new Error('Mapbox token is missing.');
+  }
+
+  const params = new URLSearchParams({
+    access_token: token,
+    language: 'pt',
+    limit: '1',
+    types: 'address,poi,place,locality,neighborhood',
+  });
+
+  const response = await fetch(
+      `https://api.mapbox.com/geocoding/v5/mapbox.places/${longitude},${
+          latitude}.json?${params.toString()}`,
+      {signal});
+
+  if (!response.ok) {
+    throw new Error('Unable to resolve the dropped pin.');
+  }
+
+  const payload = await response.json();
+  return payload.features?.[0] || null;
+}
+
+function formatLocationCoordinates(longitude, latitude) {
+  return `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+}
+
+function getPrimaryLocationLabel(value) {
+  const trimmedValue = String(value || '').trim();
+  if (!trimmedValue) {
+    return '';
+  }
+
+  const officeLocation = getOfficeLocationByAddress(trimmedValue);
+  if (officeLocation) {
+    return formatOfficeLocation(officeLocation);
+  }
+
+  return trimmedValue.split(',')[0].trim() || trimmedValue;
+}
+
+function getLocationFieldElements(fieldName, scope = document) {
+  const hiddenInput =
+      scope.querySelector(`input[type="hidden"][name="${fieldName}"]`) ||
+      scope.querySelector(`input[name="${fieldName}"]`);
+  const displayInput =
+      scope.querySelector(`input[name="${fieldName}Display"]`) || hiddenInput;
+
+  return {
+    hiddenInput,
+    displayInput,
+  };
+}
+
+function setLocationFieldValue(
+    fieldName, fullValue, scope = document, options = {}) {
+  const {hiddenInput, displayInput} =
+      getLocationFieldElements(fieldName, scope);
+  const normalizedValue = String(fullValue || '').trim();
+  const displayValue =
+      String(options.displayValue ?? getPrimaryLocationLabel(normalizedValue));
+
+  if (hiddenInput) {
+    hiddenInput.value = normalizedValue;
+  }
+
+  if (displayInput) {
+    displayInput.value = displayValue;
+  }
+}
+
+function syncLocationFieldFromDisplayInput(input) {
+  if (!input) {
+    return;
+  }
+
+  const fieldName = String(input.dataset.locationField || '').trim();
+  if (!fieldName) {
+    return;
+  }
+
+  const form = input.form || document;
+  const {hiddenInput} = getLocationFieldElements(fieldName, form);
+  if (!hiddenInput || hiddenInput === input) {
+    return;
+  }
+
+  hiddenInput.value = input.value.trim();
+}
+
+function initializeLocationAutocomplete(input) {
+  if (!input) {
+    return;
+  }
+
+  const field = input.closest('label');
+  if (!field || field.querySelector('.location-autocomplete-results')) {
+    return;
+  }
+
+  const fieldName = String(input.dataset.locationField || '').trim();
+  if (fieldName) {
+    const form = input.form || document;
+    const {hiddenInput} = getLocationFieldElements(fieldName, form);
+    if (hiddenInput && hiddenInput !== input && !hiddenInput.value.trim()) {
+      syncLocationFieldFromDisplayInput(input);
+    }
+  }
+
+  field.classList.add('location-autocomplete-field');
+  const results = document.createElement('div');
+  results.className = 'location-autocomplete-results';
+  results.hidden = true;
+  field.appendChild(results);
+
+  let activeRequestController = null;
+
+  const clearResults = () => {
+    results.hidden = true;
+    results.innerHTML = '';
+  };
+
+  const renderSuggestions = (suggestions) => {
+    if (!suggestions.length) {
+      clearResults();
+      return;
+    }
+
+    results.innerHTML = suggestions
+                            .map(
+                                (suggestion) => `
+      <button type="button" class="location-autocomplete-option" data-location-value="${
+                                    escapeHtml(suggestion.label)}">
+        <span class="location-autocomplete-primary">${
+                                    escapeHtml(suggestion.name)}</span>
+        <span class="location-autocomplete-secondary">${
+                                    escapeHtml(suggestion.label)}</span>
+      </button>
+    `).join('');
+    results.hidden = false;
+  };
+
+  const scheduleSearch = debounce(async () => {
+    const query = input.value.trim();
+    if (query.length < 3) {
+      clearResults();
+      return;
+    }
+
+    activeRequestController?.abort();
+    const requestController = new AbortController();
+    activeRequestController = requestController;
+
+    try {
+      const suggestions =
+          await fetchMapboxLocationSuggestions(query, requestController.signal);
+
+      if (activeRequestController !== requestController) {
+        return;
+      }
+
+      renderSuggestions(suggestions);
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        return;
+      }
+
+      clearResults();
+    }
+  }, 250);
+
+  input.addEventListener('input', () => {
+    syncLocationFieldFromDisplayInput(input);
+    scheduleSearch();
+  });
+
+  input.addEventListener('focus', () => {
+    if (input.value.trim().length >= 3) {
+      scheduleSearch();
+    }
+  });
+
+  input.addEventListener('blur', () => {
+    window.setTimeout(() => {
+      clearResults();
+    }, 150);
+  });
+
+  results.addEventListener('mousedown', (event) => {
+    event.preventDefault();
+  });
+
+  results.addEventListener('click', (event) => {
+    const option = event.target.closest('[data-location-value]');
+    if (!option) {
+      return;
+    }
+
+    const form = input.form || document;
+    const fieldName = input.dataset.locationField;
+    if (fieldName) {
+      setLocationFieldValue(fieldName, option.dataset.locationValue, form);
+    } else {
+      input.value = option.dataset.locationValue;
+    }
+    clearResults();
+  });
 }
 
 function formatDateTime(value) {
@@ -876,7 +1203,27 @@ function openRideCreatedModal(ride) {
 }
 
 function formatOfficeLocation(value) {
-  return OFFICE_LOCATION_LABELS[value] || '';
+  const label = OFFICE_LOCATIONS[value]?.label || '';
+  return label ? `${label} office` : '';
+}
+
+function getOfficeAddress(value) {
+  return OFFICE_LOCATIONS[value]?.address || '';
+}
+
+function getOfficeLocationByAddress(address) {
+  const normalizedAddress = String(address || '').trim().toLowerCase();
+  if (!normalizedAddress) {
+    return '';
+  }
+
+  return Object.entries(OFFICE_LOCATIONS)
+             .find(([, office]) => {
+               return String(office.address || '').trim().toLowerCase() ===
+                   normalizedAddress;
+             })
+             ?.[0] ||
+      '';
 }
 
 function syncSelectPlaceholderState(select) {
@@ -888,22 +1235,33 @@ function syncSelectPlaceholderState(select) {
 }
 
 function applyUserRouteDefaults(form) {
-  const startPointInput = form.querySelector('input[name="startPoint"]');
-  const endPointInput = form.querySelector('input[name="endPoint"]');
+  const {hiddenInput: startPointInput} =
+      getLocationFieldElements('startPoint', form);
+  const {hiddenInput: endPointInput} =
+      getLocationFieldElements('endPoint', form);
 
   if (startPointInput && !startPointInput.value) {
-    startPointInput.value = state.currentUser.defaultHome || '';
+    setLocationFieldValue(
+        'startPoint', state.currentUser.defaultStartingLocation || '', form);
   }
 
   if (endPointInput && !endPointInput.value) {
-    endPointInput.value = formatOfficeLocation(state.currentUser.defaultOffice);
+    setLocationFieldValue(
+        'endPoint', getOfficeAddress(state.currentUser.defaultOffice), form, {
+          displayValue: formatOfficeLocation(state.currentUser.defaultOffice),
+        });
   }
 }
 
-function swapInputValues(firstInput, secondInput) {
-  const firstValue = firstInput.value;
-  firstInput.value = secondInput.value;
-  secondInput.value = firstValue;
+function swapLocationFieldValues(
+    firstFieldName, secondFieldName, scope = document) {
+  const firstField = getLocationFieldElements(firstFieldName, scope);
+  const secondField = getLocationFieldElements(secondFieldName, scope);
+  const firstValue = firstField.hiddenInput?.value || '';
+  const secondValue = secondField.hiddenInput?.value || '';
+
+  setLocationFieldValue(firstFieldName, secondValue, scope);
+  setLocationFieldValue(secondFieldName, firstValue, scope);
 }
 
 function hydrateUserPill() {
@@ -1298,10 +1656,18 @@ async function setupSignupPage() {
 
   const officeSelect = document.querySelector('select[name="defaultOffice"]');
   const passwordInput = document.querySelector('input[name="password"]');
+  const {displayInput: defaultStartingLocationInput} =
+      getLocationFieldElements('defaultStartingLocation');
+  if (defaultStartingLocationInput) {
+    defaultStartingLocationInput.dataset.locationField =
+        'defaultStartingLocation';
+  }
   syncSelectPlaceholderState(officeSelect);
   officeSelect?.addEventListener('change', () => {
     syncSelectPlaceholderState(officeSelect);
   });
+  initializeLocationAutocomplete(defaultStartingLocationInput);
+  await setupLocationMapTriggers();
 
   passwordInput?.addEventListener('input', () => {
     if (!passwordInput.value || isStrongPassword(passwordInput.value)) {
@@ -1382,6 +1748,344 @@ async function setupDashboardPage() {
             <p>Inspect all users, rides, requests, and ride chat data.</p>
           </a>
         `);
+  }
+}
+
+function ensureLocationMapModal() {
+  let modal = document.querySelector('#location-map-modal');
+  if (modal) {
+    return modal;
+  }
+
+  document.body.insertAdjacentHTML('beforeend', `
+    <div id="location-map-modal" class="notes-modal" hidden>
+      <div class="notes-modal-backdrop" data-close-location-map-modal="true"></div>
+      <div class="notes-modal-panel location-map-modal-panel" role="dialog" aria-modal="true" aria-labelledby="location-map-modal-title">
+        <div class="notes-modal-header">
+          <h2 id="location-map-modal-title">Choose location</h2>
+          <button type="button" class="button-secondary notes-modal-close" data-close-location-map-modal="true" aria-label="Close location picker">Close</button>
+        </div>
+        <div class="location-map-modal-body">
+          <p id="location-map-instructions" class="location-map-instructions">Click on the map to drop a pin, then confirm the resolved location.</p>
+          <div id="location-map-canvas" class="location-map-canvas" aria-label="Location map"></div>
+          <div class="location-map-selection-card" aria-live="polite">
+            <div class="location-map-selection-label">Selected location</div>
+            <div id="location-map-selection-value" class="location-map-selection-value">No pin selected yet.</div>
+          </div>
+          <div class="location-map-actions">
+            <button type="button" class="button-secondary" data-close-location-map-modal="true">Cancel</button>
+            <button type="button" id="confirm-location-map-button" disabled>Use this location</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `);
+
+  return document.querySelector('#location-map-modal');
+}
+
+async function setupLocationMapTriggers() {
+  const openButtons =
+      Array.from(document.querySelectorAll('[data-location-target]'));
+
+  if (!openButtons.length) {
+    return;
+  }
+
+  if (!window.mapboxgl) {
+    setFeedback('Mapbox GL JS did not load.', true);
+    return;
+  }
+
+  try {
+    const config = await loadClientConfig();
+    const token = String(config?.mapboxPublicToken || '').trim();
+
+    if (!token) {
+      setFeedback('Mapbox token is missing.', true);
+      return;
+    }
+
+    window.mapboxgl.accessToken = token;
+
+    const modal = ensureLocationMapModal();
+    const mapContainer = modal.querySelector('#location-map-canvas');
+    const title = modal.querySelector('#location-map-modal-title');
+    const instructions = modal.querySelector('#location-map-instructions');
+    const selectionValue = modal.querySelector('#location-map-selection-value');
+    const confirmButton = modal.querySelector('#confirm-location-map-button');
+    let map = null;
+    let marker = null;
+    let selectedLocation = null;
+    let currentInput = null;
+    let currentFieldLabel = 'location';
+    let lookupController = null;
+
+    const setSelectionText = (message, isError = false) => {
+      selectionValue.textContent = message;
+      selectionValue.classList.toggle('location-map-selection-error', isError);
+    };
+
+    const resetSelection = (message) => {
+      selectedLocation = null;
+      confirmButton.disabled = true;
+      setSelectionText(message);
+    };
+
+    const ensureMarker = () => {
+      if (marker) {
+        return marker;
+      }
+
+      marker = new window.mapboxgl
+                   .Marker({
+                     color: '#09005d',
+                     draggable: true,
+                   })
+                   .setLngLat(DEFAULT_LOCATION_MAP_CENTER)
+                   .addTo(map);
+      marker.on('dragend', () => {
+        const lngLat = marker.getLngLat();
+        selectLocationFromCoordinates(lngLat.lng, lngLat.lat, {
+          shouldFlyTo: false,
+        });
+      });
+
+      return marker;
+    };
+
+    const initializeMap = () => {
+      if (map) {
+        requestAnimationFrame(() => {
+          map.resize();
+        });
+        return map;
+      }
+
+      map = new window.mapboxgl.Map({
+        container: mapContainer,
+        style: 'mapbox://styles/mapbox/standard',
+        center: DEFAULT_LOCATION_MAP_CENTER,
+        zoom: DEFAULT_LOCATION_MAP_ZOOM,
+        pitch: 0,
+        bearing: 0,
+        projection: 'mercator',
+        language: 'pt',
+        config: {
+          basemap: {
+            lightPreset: 'day',
+            show3dObjects: false,
+            showPointOfInterestLabels: true,
+          },
+        },
+      });
+
+      map.addControl(
+          new window.mapboxgl.NavigationControl({
+            showCompass: false,
+            visualizePitch: false,
+          }),
+          'top-right');
+
+      map.on('click', (event) => {
+        selectLocationFromCoordinates(event.lngLat.lng, event.lngLat.lat);
+      });
+
+      return map;
+    };
+
+    const selectLocationFromCoordinates =
+        async (longitude, latitude, {shouldFlyTo = true} = {}) => {
+      const activeMap = initializeMap();
+      const activeMarker = ensureMarker();
+
+      lookupController?.abort();
+      const controller = new AbortController();
+      lookupController = controller;
+
+      activeMarker.setLngLat([longitude, latitude]);
+      if (shouldFlyTo) {
+        activeMap.flyTo({
+          center: [longitude, latitude],
+          zoom: Math.max(activeMap.getZoom(), 13),
+          essential: true,
+        });
+      }
+
+      confirmButton.disabled = true;
+      setSelectionText('Resolving dropped pin...');
+
+      try {
+        const feature = await reverseGeocodeMapboxLocation(
+            longitude, latitude, controller.signal);
+
+        if (lookupController !== controller) {
+          return;
+        }
+
+        selectedLocation = {
+          label: feature?.place_name ||
+              formatLocationCoordinates(longitude, latitude),
+          longitude,
+          latitude,
+        };
+        confirmButton.disabled = false;
+        setSelectionText(selectedLocation.label);
+      } catch (error) {
+        if (error.name === 'AbortError') {
+          return;
+        }
+
+        selectedLocation = {
+          label: formatLocationCoordinates(longitude, latitude),
+          longitude,
+          latitude,
+        };
+        confirmButton.disabled = false;
+        setSelectionText(selectedLocation.label, true);
+      }
+    };
+
+    const syncMapToInputValue = async (input) => {
+      const fieldName = String(input?.dataset.locationField || '').trim();
+      const form = input?.form || document;
+      const {hiddenInput} = fieldName ?
+          getLocationFieldElements(fieldName, form) :
+          {hiddenInput: input};
+      const query = String(hiddenInput?.value || input?.value || '').trim();
+      const activeMap = initializeMap();
+
+      lookupController?.abort();
+      lookupController = null;
+
+      if (!query) {
+        selectedLocation = null;
+        confirmButton.disabled = true;
+        marker?.remove();
+        marker = null;
+        activeMap.flyTo({
+          center: DEFAULT_LOCATION_MAP_CENTER,
+          zoom: DEFAULT_LOCATION_MAP_ZOOM,
+          essential: true,
+        });
+        setSelectionText('No pin selected yet.');
+        return;
+      }
+
+      setSelectionText('Finding current location...');
+
+      try {
+        const feature = await fetchMapboxLocationFeature(query);
+        const center = feature?.center;
+
+        if (!feature || !Array.isArray(center) || center.length < 2) {
+          marker?.remove();
+          marker = null;
+          resetSelection('Click on the map to drop a pin for this field.');
+          activeMap.flyTo({
+            center: DEFAULT_LOCATION_MAP_CENTER,
+            zoom: DEFAULT_LOCATION_MAP_ZOOM,
+            essential: true,
+          });
+          return;
+        }
+
+        selectedLocation = {
+          label: feature.place_name || query,
+          longitude: center[0],
+          latitude: center[1],
+        };
+        ensureMarker().setLngLat(center);
+        activeMap.flyTo({
+          center,
+          zoom: Math.max(activeMap.getZoom(), 13),
+          essential: true,
+        });
+        confirmButton.disabled = false;
+        setSelectionText(selectedLocation.label);
+      } catch {
+        marker?.remove();
+        marker = null;
+        resetSelection('Click on the map to drop a pin for this field.');
+        activeMap.flyTo({
+          center: DEFAULT_LOCATION_MAP_CENTER,
+          zoom: DEFAULT_LOCATION_MAP_ZOOM,
+          essential: true,
+        });
+      }
+    };
+
+    const openModal = () => {
+      title.textContent = `Choose ${currentFieldLabel}`;
+      instructions.textContent = `Click on the map to drop a pin for the ${
+          currentFieldLabel}, or drag the marker to refine it.`;
+      modal.hidden = false;
+      initializeMap();
+      requestAnimationFrame(() => {
+        map?.resize();
+      });
+      syncMapToInputValue(currentInput);
+    };
+
+    const closeModal = () => {
+      modal.hidden = true;
+    };
+
+    openButtons.forEach((openButton) => {
+      openButton.addEventListener('click', () => {
+        const targetName = openButton.dataset.locationTarget;
+        const label =
+            String(openButton.dataset.locationLabel || 'location').trim();
+        const form = openButton.closest('form');
+        const {displayInput: input} =
+            getLocationFieldElements(targetName, form || document);
+
+        if (!input) {
+          setFeedback('Unable to connect the map picker to that field.', true);
+          return;
+        }
+
+        currentInput = input;
+        currentFieldLabel = label;
+        openModal();
+      });
+    });
+
+    confirmButton.addEventListener('click', () => {
+      if (!currentInput || !selectedLocation?.label) {
+        return;
+      }
+
+      const form = currentInput.form || document;
+      const fieldName = currentInput.dataset.locationField;
+      if (fieldName) {
+        setLocationFieldValue(fieldName, selectedLocation.label, form);
+      } else {
+        currentInput.value = selectedLocation.label;
+      }
+      currentInput.dispatchEvent(new Event('change', {bubbles: true}));
+      closeModal();
+    });
+
+    modal.addEventListener('click', (event) => {
+      if (event.target.closest('[data-close-location-map-modal="true"]')) {
+        closeModal();
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !modal.hidden) {
+        closeModal();
+      }
+    });
+
+    window.addEventListener('resize', () => {
+      if (map && !modal.hidden) {
+        map.resize();
+      }
+    });
+  } catch (error) {
+    setFeedback(error.message, true);
   }
 }
 
@@ -1474,8 +2178,18 @@ async function setupFindUsersPage() {
 async function setupCreateRidePage() {
   const form = document.querySelector('#ride-form');
   const carInput = form.querySelector('input[name="car"]');
-  const startPointInput = form.querySelector('input[name="startPoint"]');
-  const endPointInput = form.querySelector('input[name="endPoint"]');
+  const {displayInput: startPointInput} =
+      getLocationFieldElements('startPoint', form);
+  const {displayInput: endPointInput} =
+      getLocationFieldElements('endPoint', form);
+  const officePickerButton =
+      document.querySelector('#toggle-office-picker-button');
+  const officePickerPanel = document.querySelector('#office-picker-panel');
+  const closeOfficePickerButton =
+      document.querySelector('#close-office-picker-button');
+  const officePickerOptions = officePickerPanel ?
+      Array.from(officePickerPanel.querySelectorAll('[data-office-location]')) :
+      [];
   const dateInput = form.querySelector('input[name="rideDate"]');
   const startTimeInput = form.querySelector('input[name="startTime"]');
   const endTimeInput = form.querySelector('input[name="endTime"]');
@@ -1492,13 +2206,109 @@ async function setupCreateRidePage() {
     carInput.value = state.currentUser.defaultCar || '';
   }
 
+  if (startPointInput) {
+    startPointInput.dataset.locationField = 'startPoint';
+  }
+
+  if (endPointInput) {
+    endPointInput.dataset.locationField = 'endPoint';
+  }
+
   applyUserRouteDefaults(form);
+  initializeLocationAutocomplete(startPointInput);
+  initializeLocationAutocomplete(endPointInput);
+  await setupLocationMapTriggers();
+
+  const closeOfficePicker = () => {
+    if (!officePickerButton || !officePickerPanel) {
+      return;
+    }
+
+    officePickerPanel.hidden = true;
+    officePickerButton.setAttribute('aria-expanded', 'false');
+  };
+
+  const openOfficePicker = () => {
+    if (!officePickerButton || !officePickerPanel) {
+      return;
+    }
+
+    officePickerPanel.hidden = false;
+    officePickerButton.setAttribute('aria-expanded', 'true');
+  };
+
+  const syncOfficePickerSelection = () => {
+    const {hiddenInput} = getLocationFieldElements('endPoint', form);
+    const selectedOffice = getOfficeLocationByAddress(hiddenInput?.value || '');
+
+    officePickerOptions.forEach((option) => {
+      const isActive = option.dataset.officeLocation === selectedOffice;
+      option.classList.toggle('office-picker-option-active', isActive);
+      option.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
+  };
+
+  const applyOfficeSelection = (officeLocation) => {
+    setLocationFieldValue('endPoint', getOfficeAddress(officeLocation), form, {
+      displayValue: formatOfficeLocation(officeLocation),
+    });
+    syncOfficePickerSelection();
+  };
+
+  if (officePickerButton && officePickerPanel) {
+    syncOfficePickerSelection();
+
+    officePickerButton.addEventListener('click', () => {
+      if (officePickerPanel.hidden) {
+        openOfficePicker();
+        return;
+      }
+
+      closeOfficePicker();
+    });
+
+    officePickerOptions.forEach((option) => {
+      option.addEventListener('click', () => {
+        applyOfficeSelection(option.dataset.officeLocation || '');
+        closeOfficePicker();
+        endPointInput?.focus();
+      });
+    });
+
+    closeOfficePickerButton?.addEventListener('click', () => {
+      closeOfficePicker();
+      officePickerButton.focus();
+    });
+
+    document.addEventListener('click', (event) => {
+      if (officePickerPanel.hidden) {
+        return;
+      }
+
+      if (event.target.closest('#office-picker-panel') ||
+          event.target.closest('#toggle-office-picker-button')) {
+        return;
+      }
+
+      closeOfficePicker();
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !officePickerPanel.hidden) {
+        closeOfficePicker();
+      }
+    });
+
+    endPointInput?.addEventListener('input', syncOfficePickerSelection);
+    endPointInput?.addEventListener('change', syncOfficePickerSelection);
+  }
 
   syncRideTimeConstraints(dateInput, startTimeInput, endTimeInput);
 
   if (swapRouteButton) {
     swapRouteButton.addEventListener('click', () => {
-      swapInputValues(startPointInput, endPointInput);
+      swapLocationFieldValues('startPoint', 'endPoint', form);
+      syncOfficePickerSelection();
     });
   }
 
@@ -1732,8 +2542,9 @@ function renderDebugUser(profile, rides) {
       escapeHtml(formatOfficeLocation(profile.defaultOffice) || '—')}</div>
         </div>
         <div>
-          <strong>Default home</strong>
-          <div class="meta">${escapeHtml(profile.defaultHome || '—')}</div>
+          <strong>Default starting location</strong>
+          <div class="meta">${
+      escapeHtml(profile.defaultStartingLocation || '—')}</div>
         </div>
         <div>
           <strong>Created</strong>
@@ -1937,17 +2748,28 @@ async function setupDebugPage() {
 async function setupProfilePage() {
   const form = document.querySelector('#profile-update-form');
   const deleteAccountButton = document.querySelector('#delete-account-button');
+  const {displayInput: defaultStartingLocationInput} =
+      getLocationFieldElements('defaultStartingLocation', form);
   form.elements.name.value = state.currentUser.name || '';
   form.elements.email.value = state.currentUser.email || '';
   form.elements.phone.value = state.currentUser.phone || '';
   form.elements.defaultCar.value = state.currentUser.defaultCar || '';
   form.elements.defaultOffice.value = state.currentUser.defaultOffice || '';
-  form.elements.defaultHome.value = state.currentUser.defaultHome || '';
+  if (defaultStartingLocationInput) {
+    defaultStartingLocationInput.dataset.locationField =
+        'defaultStartingLocation';
+  }
+  setLocationFieldValue(
+      'defaultStartingLocation',
+      state.currentUser.defaultStartingLocation || '', form);
+  initializeLocationAutocomplete(defaultStartingLocationInput);
 
   syncSelectPlaceholderState(form.elements.defaultOffice);
   form.elements.defaultOffice.addEventListener('change', () => {
     syncSelectPlaceholderState(form.elements.defaultOffice);
   });
+
+  await setupLocationMapTriggers();
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();

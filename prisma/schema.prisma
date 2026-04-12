@@ -33,7 +33,7 @@ model User {
   phone        String
   defaultCar   String?
   defaultOffice OfficeLocation?
-  defaultHome   String?
+  defaultStartingLocation String?
   role         UserRole  @default(DEFAULT_USER)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt

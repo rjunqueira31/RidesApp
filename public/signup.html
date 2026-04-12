@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.css" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 
@@ -38,8 +39,8 @@
           </label>
           <label>
             Password <span class="label-required" aria-hidden="true">*</span>
-            <input type="password" name="password" placeholder="Create a password - Must include at least 8 characters." minlength="8"
-              autocomplete="new-password" required />
+            <input type="password" name="password" placeholder="Create a password - Must include at least 8 characters."
+              minlength="8" autocomplete="new-password" required />
           </label>
           <label>
             Phone number <span class="label-required" aria-hidden="true">*</span>
@@ -50,8 +51,17 @@
             <input type="text" name="defaultCar" placeholder="BMW i4" />
           </label>
           <label>
-            Default home location <span class="label-optional">(optional)</span>
-            <input type="text" name="defaultHome" placeholder="Sintra" />
+            Default starting location <span class="label-optional">(optional)</span>
+            <div class="location-field-row">
+              <input type="text" name="defaultStartingLocationDisplay"
+                placeholder="Search for your usual starting area or address" autocomplete="off" />
+              <input type="hidden" name="defaultStartingLocation" />
+              <button type="button" class="button-secondary location-map-trigger"
+                data-location-target="defaultStartingLocation" data-location-label="starting location"
+                aria-label="Choose starting location on the map">
+                <img src="images/icon_map.svg" alt="" />
+              </button>
+            </div>
           </label>
           <label>
             Default office <span class="label-optional">(optional)</span>
@@ -68,6 +78,7 @@
     </main>
   </div>
 
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.js"></script>
   <script src="app.js"></script>
 </body>
 

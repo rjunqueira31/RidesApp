@@ -156,6 +156,12 @@ app.get('/api/health', (_request, response) => {
   response.json({ok: true});
 });
 
+app.get('/api/client-config', (_request, response) => {
+  response.json({
+    mapboxPublicToken: String(process.env.MAPBOX_PUBLIC_TOKEN || '').trim(),
+  });
+});
+
 app.get('/api/auth/me', requireAuth, async (request, response) => {
   response.json({profile: request.currentUser});
 });
@@ -169,7 +175,7 @@ app.post('/api/auth/signup', authRateLimit, async (request, response, next) => {
       phone,
       defaultCar,
       defaultOffice,
-      defaultHome,
+      defaultStartingLocation,
     } = request.body;
 
     assertRequired(name, 'Name');
@@ -186,7 +192,7 @@ app.post('/api/auth/signup', authRateLimit, async (request, response, next) => {
       phone,
       defaultCar,
       defaultOffice,
-      defaultHome,
+      defaultStartingLocation,
     });
 
     createUserSession(request, profile);
@@ -307,7 +313,7 @@ app.patch(
           phone,
           defaultCar,
           defaultOffice,
-          defaultHome,
+          defaultStartingLocation,
         } = request.body;
 
         assertRequired(name, 'Name');
@@ -320,7 +326,7 @@ app.patch(
           phone,
           defaultCar,
           defaultOffice,
-          defaultHome,
+          defaultStartingLocation,
         });
 
         createUserSession(request, profile);
