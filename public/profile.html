@@ -16,10 +16,22 @@
   <div class="shell shell-wide">
     <header class="app-topbar">
       <a href="index.html" class="brand-link">MyRides</a>
-      <div class="topbar-user">
-        <span id="current-user-pill" class="user-pill"></span>
+      <button type="button" class="mobile-menu-button" aria-expanded="false" aria-controls="profile-mobile-menu-panel"
+        aria-label="Open navigation menu" data-mobile-menu-button>
+        <span class="visually-hidden">Menu</span>
+        <span class="mobile-menu-button-line"></span>
+        <span class="mobile-menu-button-line"></span>
+        <span class="mobile-menu-button-line"></span>
+      </button>
+      <div class="topbar-user" data-mobile-menu-desktop-actions>
         <a href="dashboard.html" class="nav-link">Dashboard</a>
         <button type="button" id="logout-button" class="button-secondary">Logout</button>
+      </div>
+      <div id="profile-mobile-menu-panel" class="mobile-menu-panel" data-mobile-menu-panel hidden>
+        <div class="mobile-menu-panel-actions">
+          <a href="dashboard.html" class="nav-link">Dashboard</a>
+          <button type="button" class="button-secondary" data-logout-button>Logout</button>
+        </div>
       </div>
     </header>
 

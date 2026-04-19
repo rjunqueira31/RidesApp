@@ -10,6 +10,8 @@
   --border: #d9e6f2;
   --shadow: 0 20px 50px rgba(9, 0, 93, 0.12);
   --radius: 24px;
+  --scroll-icon-top: calc(var(--logo-top) + var(--logo-size) + 32px);
+  --scroll-icon-opacity: 1;
 }
 
 * {
@@ -33,9 +35,41 @@ body {
   background-repeat: no-repeat;
 }
 
+.scroll-indicator {
+  display: none;
+  margin: 5rem auto 0;
+  width: 34px;
+  height: 78px;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.scroll-indicator__icon {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  animation: scroll-indicator-bounce 1.3s ease-in-out infinite;
+}
+
+@keyframes scroll-indicator-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-9px);
+  }
+}
+
 .trello-button {
   color: var(--accent-dark);
   font-weight: 600;
+}
+
+.trello-button:hover {
+  color: var(--accent);
 }
 
 .landing-body {
@@ -171,6 +205,10 @@ button:disabled {
   margin-bottom: 2rem;
 }
 
+.marketing-topbar {
+  position: relative;
+}
+
 .brand-link {
   font-size: 1.8rem;
   font-weight: 800;
@@ -180,6 +218,18 @@ button:disabled {
 
 [hidden] {
   display: none !important;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .marketing-actions,
@@ -194,6 +244,89 @@ button:disabled {
   gap: 0.85rem;
   align-items: center;
   flex-wrap: wrap;
+}
+
+.mobile-menu-button,
+.mobile-menu-panel {
+  display: none;
+}
+
+.mobile-menu-button {
+  position: relative;
+  border: 1px solid rgba(9, 0, 93, 0.12);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.82);
+  width: 3.25rem;
+  height: 3.25rem;
+  padding: 0;
+  box-shadow: 0 10px 30px rgba(44, 79, 158, 0.12);
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  gap: 0.28rem;
+  flex-direction: column;
+  transition:
+    transform 0.22s ease,
+    opacity 0.22s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.mobile-menu-button:hover {
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.mobile-menu-button[aria-expanded="true"] {
+  background: var(--accent-dark);
+}
+
+.mobile-menu-button-scroll-hidden {
+  opacity: 0;
+  transform: translateY(-0.85rem);
+  pointer-events: none;
+}
+
+.mobile-menu-button-line {
+  display: block;
+  width: 1.2rem;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--accent-dark);
+  transition: background 0.2s ease;
+}
+
+.mobile-menu-button[aria-expanded="true"] .mobile-menu-button-line {
+  background: white;
+}
+
+.mobile-menu-panel {
+  position: absolute;
+  top: calc(100% + 0.75rem);
+  right: 0;
+  z-index: 20;
+  width: min(18rem, 100%);
+  padding: 1rem;
+  border-radius: 1.25rem;
+  border: 1px solid rgba(95, 108, 149, 0.18);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 24px 60px rgba(27, 40, 78, 0.18);
+  backdrop-filter: blur(18px);
+}
+
+.mobile-menu-panel-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.75rem;
+}
+
+.mobile-menu-panel-actions .ghost-link,
+.mobile-menu-panel-actions .button-link,
+.mobile-menu-panel-actions .button-secondary,
+.mobile-menu-panel-actions .nav-link {
+  width: 100%;
+  justify-content: center;
+  text-align: center;
 }
 
 .nav-link {
@@ -224,6 +357,7 @@ button:disabled {
 
 .marketing-hero {
   margin-top: 0.35rem;
+  transition: opacity 0.15s ease;
 }
 
 .landing-body .marketing-hero {
@@ -306,7 +440,7 @@ button:disabled {
 
 .main-slogan {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
   align-items: center;
   margin-bottom: 4rem;
 }
@@ -318,6 +452,15 @@ button:disabled {
   line-height: 0.96;
   letter-spacing: -0.06em;
   text-align: center;
+}
+
+.main-slogan-desktop,
+.main-slogan-mobile {
+  display: block;
+}
+
+.main-slogan-mobile {
+  display: none;
 }
 
 .marketing-copy h1,
@@ -335,7 +478,6 @@ button:disabled {
 .visual-panel p,
 .hub-card p,
 .panel-card p,
-.user-pill,
 .meta,
 .empty-state {
   color: var(--muted);
@@ -358,7 +500,6 @@ button:disabled {
 }
 
 .chip,
-.user-pill,
 .pill,
 .mini-badge {
   display: inline-flex;
@@ -368,10 +509,6 @@ button:disabled {
   background: #fff;
   border: 1px solid var(--border);
   font-weight: 600;
-}
-
-.user-pill:empty {
-  display: none;
 }
 
 .hero-visual-card,
@@ -713,9 +850,35 @@ textarea::placeholder {
   overflow: hidden;
 }
 
+.location-map-modal-panel .notes-modal-header {
+  position: relative;
+  display: block;
+  padding-right: 7.5rem;
+  min-height: 3.5rem;
+}
+
+.location-map-close-buttons {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+
+.location-map-close-button-icon {
+  display: none;
+  min-width: 3.25rem;
+  width: 3.25rem;
+  height: 3.25rem;
+  padding: 0;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
 .location-map-modal-body {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-rows: minmax(0, 1fr) auto auto;
   gap: 0.85rem;
   min-height: 0;
 }
@@ -885,16 +1048,6 @@ textarea::placeholder {
   width: 40px;
   height: 40px;
   display: block;
-}
-
-@media (max-width: 640px) {
-  .location-map-actions {
-    flex-direction: column-reverse;
-  }
-
-  .location-map-actions > button {
-    width: 100%;
-  }
 }
 
 .hub-primary {
@@ -1133,13 +1286,13 @@ textarea::placeholder {
 }
 
 .rides-grid {
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
 }
 
 .user-results-grid {
   display: grid;
   gap: 1rem;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
 }
 
 .user-card {
@@ -1173,6 +1326,7 @@ textarea::placeholder {
   padding: 1.25rem;
   display: grid;
   gap: 1rem;
+  min-width: 0;
 }
 
 .ride-card-actions {
@@ -1182,6 +1336,8 @@ textarea::placeholder {
 .route {
   font-size: 1.2rem;
   font-weight: 800;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .card-grid {
@@ -1190,12 +1346,16 @@ textarea::placeholder {
   gap: 0.8rem;
 }
 
+.card-grid > * {
+  min-width: 0;
+}
+
 .ride-window-field {
   grid-column: 1 / -1;
 }
 
 .ride-window-meta {
-  white-space: nowrap;
+  white-space: pre-line;
 }
 
 .ride-notes {
@@ -1219,10 +1379,11 @@ textarea::placeholder {
 .notes-modal {
   position: fixed;
   inset: 0;
-  z-index: 20;
+  z-index: 50;
   display: grid;
   place-items: center;
   padding: 1rem;
+  overflow-y: auto;
 }
 
 .notes-modal[hidden] {
@@ -1272,12 +1433,90 @@ textarea::placeholder {
 
 .ride-created-modal-panel {
   width: min(560px, 100%);
+  max-height: min(88vh, 720px);
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+
+.ride-created-modal-panel .notes-modal-header {
+  position: relative;
+  display: block;
+  padding-right: 7.5rem;
+  min-height: 3.5rem;
+}
+
+.ride-created-modal-panel .notes-modal-close {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
+.ride-publish-modal-panel {
+  width: min(560px, 100%);
+  max-height: min(88vh, 720px);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  overflow: auto;
+  overflow-x: hidden;
+}
+
+.ride-publish-modal-header {
+  position: relative;
+  display: block;
+  padding-right: 7.5rem;
+}
+
+.ride-publish-close-buttons {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+
+.ride-publish-modal-header h2 {
+  min-width: 0;
+  margin: 0;
+}
+
+.ride-publish-close-button-icon {
+  display: none;
+  min-width: 3.25rem;
+  width: 3.25rem;
+  height: 3.25rem;
+  padding: 0;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.ride-publish-copy {
+  margin: 0;
+  color: var(--muted);
+}
+
+.ride-publish-summary {
+  display: grid;
+  gap: 0.4rem;
+  padding: 1rem;
+  background: var(--surface-soft);
+  border-radius: 18px;
+}
+
+.ride-publish-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
 .ride-details-modal-panel {
   width: min(780px, 100%);
   max-height: min(92vh, 960px);
   overflow: auto;
+  overflow-x: hidden;
 }
 
 .ride-details-modal-panel .notes-modal-header {
@@ -1293,6 +1532,25 @@ textarea::placeholder {
   right: 0;
 }
 
+.ride-details-close-buttons {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+
+.ride-details-close-button-icon {
+  display: none;
+  min-width: 3.25rem;
+  width: 3.25rem;
+  height: 3.25rem;
+  padding: 0;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
 .ride-details-modal-content {
   overflow: visible;
   min-height: 0;
@@ -1300,10 +1558,15 @@ textarea::placeholder {
   gap: 1rem;
 }
 
+.ride-details-modal-content > * {
+  min-width: 0;
+}
+
 .ride-details-summary,
 .ride-details-section {
   display: grid;
   gap: 0.75rem;
+  min-width: 0;
 }
 
 .ride-details-title {
@@ -1321,18 +1584,28 @@ textarea::placeholder {
   font-size: 0.82rem;
 }
 
-@media (max-width: 640px) {
-  .ride-details-modal-panel .notes-modal-header {
-    padding-right: 6.5rem;
-  }
-}
-
 .ride-details-grid {
   margin-top: 0.2rem;
   grid-template-columns: minmax(0, 5fr) minmax(0, 3fr) minmax(0, 2fr) minmax(0, 2fr);
 }
 
-.ride-details-grid-window .meta,
+.ride-details-grid > * {
+  min-width: 0;
+}
+.ride-details-grid-driver {
+  display: flex;
+}
+
+.ride-details-grid-driver-name {
+  padding-left: 0.3rem;
+}
+
+.ride-details-grid-window .meta {
+  white-space: pre-line;
+  overflow: visible;
+  text-overflow: clip;
+}
+
 .ride-details-grid-car .meta {
   white-space: nowrap;
   overflow: hidden;
@@ -1345,6 +1618,10 @@ textarea::placeholder {
 
 .ride-details-summary .request-form-compact {
   justify-items: start;
+}
+
+.ride-details-summary .pill-row {
+  min-width: 0;
 }
 
 .ride-details-notes {
@@ -1491,6 +1768,28 @@ textarea::placeholder {
   display: grid;
   gap: 0.8rem;
   min-height: 0;
+  min-width: 0;
+}
+
+.chat-box > * {
+  min-width: 0;
+}
+
+.chat-form {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.chat-form label {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.chat-form > button {
+  justify-self: start;
 }
 
 .request-form {
@@ -1530,6 +1829,30 @@ textarea::placeholder {
   max-height: min(34vh, 320px);
 }
 
+.ride-details-modal-content .chat-box {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  max-height: min(58vh, 34rem);
+  min-height: min(24rem, 58vh);
+  overflow: hidden;
+}
+
+.ride-details-modal-content .chat-box h3 {
+  margin: 0 0 0.35rem;
+}
+
+.ride-details-modal-content .chat-messages {
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 0.15rem;
+}
+
+.ride-details-modal-content .chat-form {
+  min-height: 0;
+}
+
 .chat-message {
   display: grid;
   gap: 0.4rem;
@@ -1546,6 +1869,7 @@ textarea::placeholder {
   display: flex;
   justify-content: space-between;
   gap: 1rem;
+  flex-wrap: wrap;
   font-size: 0.82rem;
   color: var(--muted);
 }
@@ -1702,17 +2026,25 @@ textarea::placeholder {
 
   .marketing-topbar,
   .simple-topbar {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .marketing-topbar .topbar-user,
+  .simple-topbar .marketing-actions {
+    flex-wrap: nowrap;
+    margin-left: auto;
   }
 
   .app-topbar {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
   }
 
   .app-topbar .topbar-user {
     justify-content: flex-end;
+    flex-wrap: nowrap;
+    margin-left: auto;
   }
 
   .journey-showcase {
@@ -1722,6 +2054,89 @@ textarea::placeholder {
 }
 
 @media (max-width: 640px) {
+  .notes-modal {
+    place-items: start center;
+    padding: 0.75rem;
+  }
+
+  .location-map-modal-panel {
+    height: calc(100dvh - 1.5rem);
+    max-height: calc(100dvh - 1.5rem);
+    padding: 1rem;
+  }
+
+  .location-map-modal-panel .notes-modal-header {
+    padding-right: 4.5rem;
+  }
+
+  .location-map-close-button-text {
+    display: none;
+  }
+
+  .location-map-close-button-icon {
+    display: inline-flex;
+  }
+
+  .location-map-cancel-button {
+    display: none;
+  }
+
+  .ride-created-modal-panel {
+    width: min(100%, 560px);
+    max-height: calc(100dvh - 1.5rem);
+    padding: 1rem;
+  }
+
+  .ride-publish-modal-panel {
+    width: min(100%, 560px);
+    max-height: calc(100dvh - 1.5rem);
+    padding: 1rem;
+  }
+
+  .ride-publish-modal-header {
+    padding-right: 4.5rem;
+  }
+
+  .ride-publish-close-button-text {
+    display: none;
+  }
+
+  .ride-publish-close-button-icon {
+    display: inline-flex;
+  }
+
+  .ride-publish-actions {
+    flex-direction: column;
+  }
+
+  .ride-publish-actions > button {
+    width: 100%;
+  }
+
+  .ride-created-modal-panel .notes-modal-header {
+    padding-right: 6.5rem;
+  }
+
+  .ride-details-modal-panel .notes-modal-header {
+    padding-right: 6.5rem;
+  }
+
+  .ride-details-close-button-text {
+    display: none;
+  }
+
+  .ride-details-close-button-icon {
+    display: inline-flex;
+  }
+
+  .location-map-actions {
+    flex-direction: column-reverse;
+  }
+
+  .location-map-actions > button {
+    width: 100%;
+  }
+
   .toast {
     width: min(100%, 420px);
   }
@@ -1751,7 +2166,106 @@ textarea::placeholder {
   }
 
   .user-search-toolbar {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: 1fr;
     align-items: stretch;
+  }
+
+  .user-search-toolbar > button {
+    width: 100%;
+  }
+
+  .ride-window-meta {
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .ride-details-grid-window .meta {
+    white-space: pre-line;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .ride-details-grid-car .meta {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .chat-form > button,
+  .ride-details-summary .request-form-compact > button,
+  .ride-driver-requests-list .actions > button {
+    width: 100%;
+  }
+
+  .ride-details-modal-content .chat-messages {
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .ride-details-modal-content .chat-box {
+    max-height: min(62vh, 30rem);
+    min-height: min(22rem, 62vh);
+  }
+
+  .ride-driver-requests-list .actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 760px) {
+  .main-slogan-desktop {
+    display: none;
+  }
+
+  .main-slogan-mobile {
+    display: block;
+  }
+
+  .marketing-topbar,
+  .simple-topbar,
+  .app-topbar {
+    flex-direction: row;
+    align-items: center;
+    padding-right: 4.5rem;
+  }
+
+  [data-mobile-menu-desktop-actions] {
+    display: none !important;
+  }
+
+  .mobile-menu-button {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 30;
+    display: inline-flex;
+  }
+
+  .mobile-menu-panel {
+    position: fixed;
+    top: 4.85rem;
+    right: 1rem;
+    z-index: 29;
+    width: min(18rem, calc(100vw - 2rem));
+  }
+
+  .mobile-menu-panel:not([hidden]) {
+    display: block;
+  }
+
+  .scroll-indicator {
+    display: block;
+  }
+
+  .marketing-hero {
+    opacity: 0;
   }
 }

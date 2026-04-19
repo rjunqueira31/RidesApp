@@ -15,21 +15,45 @@
   <div class="shell shell-wide landing-shell">
     <header class="marketing-topbar">
       <a href="index.html" class="brand-link">MyRides</a>
-      <nav id="landing-guest-actions" class="marketing-actions">
+      <button type="button" id="landing-mobile-menu-button" class="mobile-menu-button" aria-expanded="false"
+        aria-controls="landing-mobile-menu-panel" aria-label="Open navigation menu" data-mobile-menu-button>
+        <span class="visually-hidden">Menu</span>
+        <span class="mobile-menu-button-line"></span>
+        <span class="mobile-menu-button-line"></span>
+        <span class="mobile-menu-button-line"></span>
+      </button>
+      <nav id="landing-guest-actions" class="marketing-actions" data-mobile-menu-desktop-actions>
         <a href="login.html" class="ghost-link">Login</a>
         <a href="signup.html" class="button-link">Signup</a>
       </nav>
-      <div id="landing-auth-actions" class="topbar-user" hidden>
-        <span id="current-user-pill" class="user-pill"></span>
+      <div id="landing-auth-actions" class="topbar-user" data-mobile-menu-desktop-actions hidden>
         <a href="dashboard.html" class="nav-link">Dashboard</a>
         <a href="profile.html" class="nav-link">Profile</a>
-        <button type="button" id="logout-button" class="button-secondary">Logout</button>
+        <button type="button" class="button-secondary" data-logout-button>Logout</button>
+      </div>
+      <div id="landing-mobile-menu-panel" class="mobile-menu-panel" data-mobile-menu-panel hidden>
+        <nav id="landing-mobile-guest-actions" class="mobile-menu-panel-actions">
+          <a href="login.html" class="ghost-link">Login</a>
+          <a href="signup.html" class="button-link">Signup</a>
+        </nav>
+        <div id="landing-mobile-auth-actions" class="mobile-menu-panel-actions" hidden>
+          <a href="dashboard.html" class="nav-link">Dashboard</a>
+          <a href="profile.html" class="nav-link">Profile</a>
+          <button type="button" class="button-secondary" data-logout-button>Logout</button>
+        </div>
       </div>
     </header>
 
     <section class="main-slogan">
-      <h1>Ride<br />Better &middot; Together &middot; Further</h1>
+      <h1>
+        <span class="main-slogan-desktop">Ride<br />Better &middot; Together &middot; Further</span>
+        <span class="main-slogan-mobile">Ride<br />&middot;<br />Better<br />Together<br />Further</span>
+      </h1>
+      <div class="scroll-indicator" aria-hidden="true">
+        <img src="images/scroll-icon.svg" alt="" class="scroll-indicator__icon">
+      </div>
     </section>
+
     <main class="marketing-hero">
       <section class="main-row">
         <section class="marketing-copy">
@@ -122,7 +146,10 @@
   <footer class="footer">
     <div class="shell shell-wide">
       <div class="footer-content">
-        <p>This is still in development! If you have any suggestions, feedback or bug findings, add them here <a class="trello-button" href="https://trello.com/invite/b/69d8f138f1f0de58d3ecb752/ATTId6fb85f716576e6e80fb253e34eff532A46F8806/myrides-suggestions-bugs"><b>Trello Board</b></a></p>
+        <p>This is still in development! If you have any suggestions, feedback or bug findings, add them here <a
+            class="trello-button"
+            href="https://trello.com/invite/b/69d8f138f1f0de58d3ecb752/ATTId6fb85f716576e6e80fb253e34eff532A46F8806/myrides-suggestions-bugs"><b>Trello
+              Board</b></a></p>
       </div>
       <!-- <div class="social-media" aria-label="Social media links">
         <ul>

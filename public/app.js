@@ -366,6 +366,13 @@ function getPrimaryLocationLabel(value) {
   return trimmedValue.split(',')[0].trim() || trimmedValue;
 }
 
+function formatRideRouteLabel(ride, separator = ' → ') {
+  const startLabel = getPrimaryLocationLabel(ride?.startPoint);
+  const endLabel = getPrimaryLocationLabel(ride?.endPoint);
+
+  return `${startLabel || '—'}${separator}${endLabel || '—'}`;
+}
+
 function getLocationFieldElements(fieldName, scope = document) {
   const hiddenInput =
       scope.querySelector(`input[type="hidden"][name="${fieldName}"]`) ||
@@ -566,13 +573,24 @@ function formatClockTime(value) {
       .format(new Date(value));
 }
 
-function isSameCalendarDay(leftValue, rightValue) {
-  const left = new Date(leftValue);
-  const right = new Date(rightValue);
+function getCalendarDayKey(value) {
+  const parts = new Intl
+                    .DateTimeFormat(undefined, {
+                      year: 'numeric',
+                      month: 'numeric',
+                      day: 'numeric',
+                    })
+                    .formatToParts(new Date(value));
 
-  return left.getFullYear() === right.getFullYear() &&
-      left.getMonth() === right.getMonth() &&
-      left.getDate() === right.getDate();
+  const year = parts.find((part) => part.type === 'year')?.value || '';
+  const month = parts.find((part) => part.type === 'month')?.value || '';
+  const day = parts.find((part) => part.type === 'day')?.value || '';
+
+  return `${year}-${month}-${day}`;
+}
+
+function isSameCalendarDay(leftValue, rightValue) {
+  return getCalendarDayKey(leftValue) === getCalendarDayKey(rightValue);
 }
 
 function formatDateTimeRange(startValue, endValue) {
@@ -585,7 +603,8 @@ function formatDateTimeRange(startValue, endValue) {
         formatClockTime(startValue)} - ${formatClockTime(endValue)}`;
   }
 
-  return `${formatDateTime(startValue)} - ${formatDateTime(endValue)}`;
+  return `${formatDateTime(startValue)}
+${formatDateTime(endValue)}`;
 }
 
 function formatDateForInput(date) {
@@ -759,7 +778,10 @@ function ensureRideDetailsModal() {
       <div class="notes-modal-panel ride-details-modal-panel" role="dialog" aria-modal="true" aria-labelledby="ride-details-modal-title">
         <div class="notes-modal-header">
           <h2 id="ride-details-modal-title" class="ride-details-title">Ride details</h2>
-          <button type="button" class="button-secondary notes-modal-close" data-close-ride-details-modal="true" aria-label="Close ride details">Close</button>
+          <div class="ride-details-close-buttons">
+            <button type="button" class="button-secondary notes-modal-close ride-details-close-button-text" data-close-ride-details-modal="true" aria-label="Close ride details">Close</button>
+            <button type="button" class="button-secondary notes-modal-close ride-details-close-button-icon" data-close-ride-details-modal="true" aria-label="Close ride details">&times;</button>
+          </div>
         </div>
         <div id="ride-details-modal-content" class="ride-details-modal-content"></div>
       </div>
@@ -879,10 +901,16 @@ function ensureRideDetailsModal() {
 function renderRideDetailsContent(ride) {
   const isDriver = state.currentUser && ride.driverId === state.currentUser.id;
   const currentRequest = getCurrentUserRequest(ride);
+  const driverName = ride.driver?.name || ride.driverEmail;
   const notes = String(ride.notes || '').trim() || 'No notes for this ride.';
 
   return `
     <div class="ride-details-summary">
+     <div class="ride-details-grid-driver">
+        <strong>Driver:</strong>
+        <div class="ride-details-grid-driver-name">${
+      escapeHtml(driverName)}</div>
+      </div>
       <div class="card-grid ride-details-grid">
         <div class="ride-details-grid-window">
           <strong>Window</strong>
@@ -904,6 +932,7 @@ function renderRideDetailsContent(ride) {
         </div>
       </div>
       <div class="pill-row">
+        ${renderRideAvailabilityPill(ride)}
         ${
       currentRequest ?
           `<span class="pill status-${currentRequest.status}">Your request: ${
@@ -936,13 +965,11 @@ async function refreshRideDetailsModal() {
   const content = modal.querySelector('#ride-details-modal-content');
   const payload = await api(`/api/rides/${rideId}`);
   const ride = payload.ride;
-  const driverName = ride.driver?.name || ride.driverEmail;
+
 
   modal.querySelector('#ride-details-modal-title').innerHTML =
       `<span class="ride-details-title-text">${
-          escapeHtml(`${ride.startPoint} → ${ride.endPoint} | Driver: ${
-              driverName}`)}</span>${
-          renderRideAvailabilityPill(ride, 'ride-details-title-pill')}`;
+          escapeHtml(`${formatRideRouteLabel(ride)}`)}</span>`;
   content.innerHTML = renderRideDetailsContent(ride);
 }
 
@@ -991,8 +1018,8 @@ function renderRideSummaryMarkup(ride, options = {}) {
   const notes = String(ride.notes || '').trim();
 
   return `
-    <div class="ride-created-route">${escapeHtml(ride.startPoint)} to ${
-      escapeHtml(ride.endPoint)}</div>
+    <div class="ride-created-route">${
+      escapeHtml(formatRideRouteLabel(ride, ' to '))}</div>
     <div class="ride-created-meta">${
       escapeHtml(formatDateTimeRange(
           ride.startWindowStart, ride.startWindowEnd))}</div>
@@ -1006,42 +1033,61 @@ function renderRideSummaryMarkup(ride, options = {}) {
   `;
 }
 
-function ensureRideConfirmModal() {
-  let modal = document.querySelector('#ride-confirm-modal');
+function ensureRidePublishModal() {
+  let modal = document.querySelector('#ride-publish-modal');
   if (modal) {
     return modal;
   }
 
   document.body.insertAdjacentHTML('beforeend', `
-    <div id="ride-confirm-modal" class="notes-modal" hidden>
-      <div class="notes-modal-backdrop" data-dismiss-ride-confirm-modal="true"></div>
-      <div class="notes-modal-panel ride-created-modal-panel" role="dialog" aria-modal="true" aria-labelledby="ride-confirm-modal-title">
-        <div class="notes-modal-header">
-          <h2 id="ride-confirm-modal-title">Confirm your ride details</h2>
-          <button type="button" class="button-secondary notes-modal-close" data-dismiss-ride-confirm-modal="true" aria-label="Close ride confirmation">Close</button>
+    <div id="ride-publish-modal" class="notes-modal" hidden>
+      <div class="notes-modal-backdrop" data-ride-publish-action="dismiss"></div>
+      <div class="notes-modal-panel ride-publish-modal-panel" role="dialog" aria-modal="true" aria-labelledby="ride-publish-modal-title">
+        <div class="ride-publish-modal-header">
+          <h2 id="ride-publish-modal-title"></h2>
+          <div class="ride-publish-close-buttons">
+            <button type="button" class="button-secondary notes-modal-close ride-publish-close-button-text" data-ride-publish-close-button data-ride-publish-action="dismiss" aria-label="Close ride publish dialog">Close</button>
+            <button type="button" class="button-secondary notes-modal-close ride-publish-close-button-icon" data-ride-publish-close-button data-ride-publish-action="dismiss" aria-label="Close ride publish dialog">&times;</button>
+          </div>
         </div>
-        <p class="ride-created-copy">Review the details below. Your ride will only be published after you confirm.</p>
-        <div id="ride-confirm-summary" class="ride-created-summary"></div>
-        <div class="ride-created-actions">
-          <button type="button" class="button-secondary" data-dismiss-ride-confirm-modal="true">Edit ride</button>
-          <button type="button" id="ride-confirm-submit">Confirm and publish</button>
-        </div>
+        <p id="ride-publish-copy" class="ride-publish-copy"></p>
+        <div id="ride-publish-summary" class="ride-publish-summary"></div>
+        <div id="ride-publish-actions" class="ride-publish-actions"></div>
       </div>
     </div>
   `);
 
-  modal = document.querySelector('#ride-confirm-modal');
+  modal = document.querySelector('#ride-publish-modal');
   modal.addEventListener('click', async (event) => {
-    if (event.target.closest('[data-dismiss-ride-confirm-modal="true"]')) {
+    const actionTrigger = event.target.closest('[data-ride-publish-action]');
+    if (!actionTrigger) {
+      return;
+    }
+
+    const action = actionTrigger.dataset.ridePublishAction;
+
+    if (action === 'dismiss' || action === 'edit-ride' ||
+        action === 'create-another') {
       modal.hidden = true;
       return;
     }
 
-    const confirmButton = event.target.closest('#ride-confirm-submit');
-    if (!confirmButton || !pendingRidePublish) {
+    if (action === 'return-after-publish') {
+      redirectTo(
+          consumeReturnPath(CREATE_RIDE_RETURN_PATH_KEY, 'dashboard.html'));
       return;
     }
 
+    if (action === 'view-my-rides') {
+      redirectTo('my-rides.html');
+      return;
+    }
+
+    if (action !== 'confirm-publish' || !pendingRidePublish) {
+      return;
+    }
+
+    const confirmButton = actionTrigger;
     const {ride, form, carInput, dateInput, startTimeInput, endTimeInput} =
         pendingRidePublish;
 
@@ -1061,8 +1107,10 @@ function ensureRideConfirmModal() {
       endTimeInput.value = addMinutesToTime(startTimeInput.value, 60);
       syncRideTimeConstraints(dateInput, startTimeInput, endTimeInput);
       pendingRidePublish = null;
-      modal.hidden = true;
-      openRideCreatedModal(payload.ride);
+      setRidePublishModalState({
+        mode: 'success',
+        ride: payload.ride,
+      });
     } catch (error) {
       setFeedback(error.message, true);
       confirmButton.disabled = false;
@@ -1072,62 +1120,63 @@ function ensureRideConfirmModal() {
   return modal;
 }
 
-function openRideConfirmModal(pendingRide) {
-  const modal = ensureRideConfirmModal();
-  const summary = modal.querySelector('#ride-confirm-summary');
-  const confirmButton = modal.querySelector('#ride-confirm-submit');
+function setRidePublishModalState({mode, ride}) {
+  const modal = ensureRidePublishModal();
+  const title = modal.querySelector('#ride-publish-modal-title');
+  const copy = modal.querySelector('#ride-publish-copy');
+  const summary = modal.querySelector('#ride-publish-summary');
+  const actions = modal.querySelector('#ride-publish-actions');
+  const closeButtons =
+      Array.from(modal.querySelectorAll('[data-ride-publish-close-button]'));
 
-  pendingRidePublish = pendingRide;
-  summary.innerHTML = renderRideSummaryMarkup(pendingRide.ride, {
-    showNotes: true,
-  });
-  confirmButton.disabled = false;
-  modal.hidden = false;
-}
-
-function ensureRideCreatedModal() {
-  let modal = document.querySelector('#ride-created-modal');
-  if (modal) {
+  if (mode === 'success') {
+    title.textContent = 'Ride published successfully';
+    copy.textContent = 'Your ride is now visible to others.';
+    summary.innerHTML = renderRideSummaryMarkup(ride);
+    actions.innerHTML = `
+      <button type="button" class="button-secondary" data-ride-publish-action="create-another">Create another</button>
+      <button type="button" data-ride-publish-action="view-my-rides">See my rides</button>
+    `;
+    closeButtons.forEach((closeButton) => {
+      closeButton.dataset.ridePublishAction = 'return-after-publish';
+      closeButton.setAttribute('aria-label', 'Close confirmation');
+    });
+    modal.hidden = false;
     return modal;
   }
 
-  document.body.insertAdjacentHTML('beforeend', `
-    <div id="ride-created-modal" class="notes-modal" hidden>
-      <div class="notes-modal-backdrop" data-dismiss-ride-created-modal="true"></div>
-      <div class="notes-modal-panel ride-created-modal-panel" role="dialog" aria-modal="true" aria-labelledby="ride-created-modal-title">
-        <div class="notes-modal-header">
-          <h2 id="ride-created-modal-title">Ride published</h2>
-          <button type="button" class="button-secondary notes-modal-close" data-go-to-landing-after-ride="true" aria-label="Close confirmation">Close</button>
-        </div>
-        <p class="ride-created-copy">Your ride is now visible to colleagues.</p>
-        <div id="ride-created-summary" class="ride-created-summary"></div>
-        <div class="ride-created-actions">
-          <button type="button" class="button-secondary" data-dismiss-ride-created-modal="true">Create another</button>
-          <button type="button" id="ride-created-view-my-rides">See my rides</button>
-        </div>
-      </div>
-    </div>
-  `);
-
-  modal = document.querySelector('#ride-created-modal');
-  modal.addEventListener('click', (event) => {
-    if (event.target.closest('[data-go-to-landing-after-ride="true"]')) {
-      redirectTo(
-          consumeReturnPath(CREATE_RIDE_RETURN_PATH_KEY, 'dashboard.html'));
-      return;
-    }
-
-    if (event.target.closest('[data-dismiss-ride-created-modal="true"]')) {
-      modal.hidden = true;
-      return;
-    }
-
-    if (event.target.closest('#ride-created-view-my-rides')) {
-      redirectTo('my-rides.html');
-    }
+  title.textContent = 'Confirm your ride details';
+  copy.textContent =
+      'Review the details below. Your ride will only be published after you confirm.';
+  summary.innerHTML = renderRideSummaryMarkup(ride, {
+    showNotes: true,
   });
-
+  actions.innerHTML = `
+    <button type="button" class="button-secondary" data-ride-publish-action="edit-ride">Edit ride</button>
+    <button type="button" id="ride-confirm-submit" data-ride-publish-action="confirm-publish">Confirm and publish</button>
+  `;
+  closeButtons.forEach((closeButton) => {
+    closeButton.dataset.ridePublishAction = 'dismiss';
+    closeButton.setAttribute('aria-label', 'Close ride confirmation');
+  });
+  modal.hidden = false;
   return modal;
+}
+
+function openRideConfirmModal(pendingRide) {
+  pendingRidePublish = pendingRide;
+  setRidePublishModalState({
+    mode: 'confirm',
+    ride: pendingRide.ride,
+  });
+}
+
+function openRideCreatedModal(ride) {
+  pendingRidePublish = null;
+  setRidePublishModalState({
+    mode: 'success',
+    ride,
+  });
 }
 
 function deleteCurrentAccount() {
@@ -1193,15 +1242,6 @@ function openDeleteAccountModal() {
   modal.hidden = false;
 }
 
-function openRideCreatedModal(ride) {
-  const modal = ensureRideCreatedModal();
-  const summary = modal.querySelector('#ride-created-summary');
-
-  summary.innerHTML = renderRideSummaryMarkup(ride);
-
-  modal.hidden = false;
-}
-
 function formatOfficeLocation(value) {
   const label = OFFICE_LOCATIONS[value]?.label || '';
   return label ? `${label} office` : '';
@@ -1264,50 +1304,196 @@ function swapLocationFieldValues(
   setLocationFieldValue(secondFieldName, firstValue, scope);
 }
 
-function hydrateUserPill() {
-  const pill = document.querySelector('#current-user-pill');
-  if (!pill || !state.currentUser) {
-    return;
-  }
-
-  pill.textContent = `${state.currentUser.name} · ${state.currentUser.email}`;
-}
-
 function wireLogout() {
-  const logoutButton = document.querySelector('#logout-button');
-  if (!logoutButton) {
+  const logoutButtons =
+      document.querySelectorAll('[data-logout-button], #logout-button');
+  if (!logoutButtons.length) {
     return;
   }
 
-  logoutButton.addEventListener('click', async () => {
-    try {
-      await api('/api/auth/logout', {
-        method: 'POST',
-      });
-    } catch {
-      // Ignore logout failures locally and clear client state anyway.
-    } finally {
-      state.currentUser = null;
-      redirectTo('index.html');
+  logoutButtons.forEach((logoutButton) => {
+    if (logoutButton.dataset.logoutWired === 'true') {
+      return;
     }
+
+    logoutButton.dataset.logoutWired = 'true';
+    logoutButton.addEventListener('click', async () => {
+      try {
+        await api('/api/auth/logout', {
+          method: 'POST',
+        });
+      } catch {
+        // Ignore logout failures locally and clear client state anyway.
+      } finally {
+        state.currentUser = null;
+        redirectTo('index.html');
+      }
+    });
   });
 }
 
+function setupMobileMenus() {
+  const menuButtons =
+      Array.from(document.querySelectorAll('[data-mobile-menu-button]'));
+
+  if (!menuButtons.length) {
+    return;
+  }
+
+  const closeAllMenus = ({exceptButton = null} = {}) => {
+    menuButtons.forEach((menuButton) => {
+      const panelId = menuButton.getAttribute('aria-controls');
+      const menuPanel = panelId ? document.getElementById(panelId) : null;
+
+      if (!menuPanel || menuButton === exceptButton) {
+        return;
+      }
+
+      menuPanel.hidden = true;
+      menuButton.setAttribute('aria-expanded', 'false');
+    });
+  };
+
+  const setMenuButtonsVisible = (isVisible) => {
+    menuButtons.forEach((menuButton) => {
+      menuButton.classList.toggle(
+          'mobile-menu-button-scroll-hidden', !isVisible);
+    });
+  };
+
+  const syncMenuButtonsVisibility = (() => {
+    const mobileBreakpoint = 760;
+    const topVisibleThreshold = 24;
+    const showOnScrollUpDelta = 18;
+    const hideOnScrollDownDelta = 28;
+    let lastScrollY = window.scrollY;
+    let upwardTravel = 0;
+    let downwardTravel = 0;
+
+    return () => {
+      if (window.innerWidth > mobileBreakpoint) {
+        upwardTravel = 0;
+        downwardTravel = 0;
+        lastScrollY = window.scrollY;
+        setMenuButtonsVisible(true);
+        return;
+      }
+
+      const currentScrollY = Math.max(window.scrollY, 0);
+      const hasOpenMenu = menuButtons.some(
+          (menuButton) => menuButton.getAttribute('aria-expanded') === 'true');
+
+      if (hasOpenMenu || currentScrollY <= topVisibleThreshold) {
+        upwardTravel = 0;
+        downwardTravel = 0;
+        lastScrollY = currentScrollY;
+        setMenuButtonsVisible(true);
+        return;
+      }
+
+      const delta = currentScrollY - lastScrollY;
+      if (Math.abs(delta) < 2) {
+        return;
+      }
+
+      if (delta > 0) {
+        downwardTravel += delta;
+        upwardTravel = 0;
+        if (downwardTravel >= hideOnScrollDownDelta) {
+          setMenuButtonsVisible(false);
+        }
+      } else {
+        upwardTravel += Math.abs(delta);
+        downwardTravel = 0;
+        if (upwardTravel >= showOnScrollUpDelta) {
+          setMenuButtonsVisible(true);
+        }
+      }
+
+      lastScrollY = currentScrollY;
+    };
+  })();
+
+  menuButtons.forEach((menuButton) => {
+    if (menuButton.dataset.mobileMenuWired === 'true') {
+      return;
+    }
+
+    const panelId = menuButton.getAttribute('aria-controls');
+    const menuPanel = panelId ? document.getElementById(panelId) : null;
+
+    if (!menuPanel) {
+      return;
+    }
+
+    menuButton.dataset.mobileMenuWired = 'true';
+    menuButton.addEventListener('click', () => {
+      const shouldOpen = menuPanel.hidden;
+      closeAllMenus({exceptButton: shouldOpen ? menuButton : null});
+      menuPanel.hidden = !shouldOpen;
+      menuButton.setAttribute('aria-expanded', String(shouldOpen));
+      syncMenuButtonsVisibility();
+    });
+
+    menuPanel.addEventListener('click', (event) => {
+      if (event.target.closest('a, button')) {
+        closeAllMenus();
+        syncMenuButtonsVisibility();
+      }
+    });
+  });
+
+  if (document.body.dataset.mobileMenusGlobalWired === 'true') {
+    return;
+  }
+
+  document.body.dataset.mobileMenusGlobalWired = 'true';
+
+  document.addEventListener('click', (event) => {
+    if (event.target.closest('[data-mobile-menu-button]') ||
+        event.target.closest('[data-mobile-menu-panel]')) {
+      return;
+    }
+
+    closeAllMenus();
+    syncMenuButtonsVisibility();
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeAllMenus();
+      syncMenuButtonsVisibility();
+    }
+  });
+
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 760) {
+      closeAllMenus();
+    }
+
+    syncMenuButtonsVisibility();
+  });
+
+  window.addEventListener('scroll', syncMenuButtonsVisibility, {passive: true});
+  syncMenuButtonsVisibility();
+}
+
 function syncLandingPageAuthState() {
-  const guestHeaderActions = document.querySelector('#landing-guest-actions');
-  const authHeaderActions = document.querySelector('#landing-auth-actions');
+  const guestHeaderActions = document.querySelectorAll(
+      '#landing-guest-actions, #landing-mobile-guest-actions');
+  const authHeaderActions = document.querySelectorAll(
+      '#landing-auth-actions, #landing-mobile-auth-actions');
   const isAuthenticated = Boolean(state.currentUser);
 
-  if (guestHeaderActions) {
-    guestHeaderActions.hidden = isAuthenticated;
-  }
+  guestHeaderActions.forEach((element) => {
+    element.hidden = isAuthenticated;
+  });
 
-  if (authHeaderActions) {
-    authHeaderActions.hidden = !isAuthenticated;
-  }
+  authHeaderActions.forEach((element) => {
+    element.hidden = !isAuthenticated;
+  });
 
   if (isAuthenticated) {
-    hydrateUserPill();
     wireLogout();
   }
 }
@@ -1504,8 +1690,7 @@ function renderRideCard(ride, options = {}) {
   return `
     <article class="ride-card" data-ride-id="${ride.id}">
       <div>
-        <div class="route">${escapeHtml(ride.startPoint)} → ${
-      escapeHtml(ride.endPoint)}</div>
+        <div class="route">${escapeHtml(formatRideRouteLabel(ride))}</div>
         <div class="meta">Driver: ${
       escapeHtml(ride.driver?.name || ride.driverEmail)}</div>
       </div>
@@ -1629,7 +1814,6 @@ function ensureAuthenticated() {
     return false;
   }
 
-  hydrateUserPill();
   wireLogout();
   return true;
 }
@@ -1645,6 +1829,23 @@ function ensureManager() {
 
 async function setupLandingPage() {
   syncLandingPageAuthState();
+
+  const scrollIndicator = document.querySelector('.scroll-indicator');
+  const marketingHero = document.querySelector('.marketing-hero');
+  if (scrollIndicator || marketingHero) {
+    const fadeDistance = 220;
+    const mobileBreakpoint = 760;
+    const syncScrollIndicator = () => {
+      const isMobile = window.innerWidth <= mobileBreakpoint;
+      const progress = Math.min(1, window.scrollY / fadeDistance);
+      if (scrollIndicator) scrollIndicator.style.opacity = 1 - progress;
+      if (marketingHero) {
+        marketingHero.style.opacity = isMobile ? progress : '';
+      }
+    };
+    window.addEventListener('scroll', syncScrollIndicator, {passive: true});
+    syncScrollIndicator();
+  }
 }
 
 async function setupSignupPage() {
@@ -1763,17 +1964,19 @@ function ensureLocationMapModal() {
       <div class="notes-modal-panel location-map-modal-panel" role="dialog" aria-modal="true" aria-labelledby="location-map-modal-title">
         <div class="notes-modal-header">
           <h2 id="location-map-modal-title">Choose location</h2>
-          <button type="button" class="button-secondary notes-modal-close" data-close-location-map-modal="true" aria-label="Close location picker">Close</button>
+          <div class="location-map-close-buttons">
+            <button type="button" class="button-secondary location-map-close-button-text" data-close-location-map-modal="true" aria-label="Close location picker">Close</button>
+            <button type="button" class="button-secondary location-map-close-button-icon" data-close-location-map-modal="true" aria-label="Close location picker">&times;</button>
+          </div>
         </div>
         <div class="location-map-modal-body">
-          <p id="location-map-instructions" class="location-map-instructions">Click on the map to drop a pin, then confirm the resolved location.</p>
           <div id="location-map-canvas" class="location-map-canvas" aria-label="Location map"></div>
           <div class="location-map-selection-card" aria-live="polite">
             <div class="location-map-selection-label">Selected location</div>
             <div id="location-map-selection-value" class="location-map-selection-value">No pin selected yet.</div>
           </div>
           <div class="location-map-actions">
-            <button type="button" class="button-secondary" data-close-location-map-modal="true">Cancel</button>
+            <button type="button" class="button-secondary location-map-cancel-button" data-close-location-map-modal="true">Cancel</button>
             <button type="button" id="confirm-location-map-button" disabled>Use this location</button>
           </div>
         </div>
@@ -1811,7 +2014,6 @@ async function setupLocationMapTriggers() {
     const modal = ensureLocationMapModal();
     const mapContainer = modal.querySelector('#location-map-canvas');
     const title = modal.querySelector('#location-map-modal-title');
-    const instructions = modal.querySelector('#location-map-instructions');
     const selectionValue = modal.querySelector('#location-map-selection-value');
     const confirmButton = modal.querySelector('#confirm-location-map-button');
     let map = null;
@@ -2017,8 +2219,6 @@ async function setupLocationMapTriggers() {
 
     const openModal = () => {
       title.textContent = `Choose ${currentFieldLabel}`;
-      instructions.textContent = `Click on the map to drop a pin for the ${
-          currentFieldLabel}, or drag the marker to refine it.`;
       modal.hidden = false;
       initializeMap();
       requestAnimationFrame(() => {
@@ -2564,8 +2764,7 @@ function renderDebugUser(profile, rides) {
                   .map(
                       (ride) => `
                   <li>
-                    <strong>${escapeHtml(ride.startPoint)} → ${
-                          escapeHtml(ride.endPoint)}</strong>
+                    <strong>${escapeHtml(formatRideRouteLabel(ride))}</strong>
                     <span class="meta">${
                           formatDateTimeRange(
                               ride.startWindowStart,
@@ -2593,8 +2792,7 @@ function renderDebugUser(profile, rides) {
 
                     return `
                   <li>
-                    <strong>${escapeHtml(ride.startPoint)} → ${
-                        escapeHtml(ride.endPoint)}</strong>
+                    <strong>${escapeHtml(formatRideRouteLabel(ride))}</strong>
                     <span class="meta">Driver: ${
                         escapeHtml(
                             ride.driver?.name || ride.driverEmail)}</span>
@@ -2619,7 +2817,7 @@ function renderDebugRide(ride) {
     <article class="debug-card">
       <div class="debug-card-header">
         <div>
-          <h3>${escapeHtml(ride.startPoint)} → ${escapeHtml(ride.endPoint)}</h3>
+          <h3>${escapeHtml(formatRideRouteLabel(ride))}</h3>
           <p class="meta">Ride ID: ${escapeHtml(ride.id)}</p>
         </div>
         <div class="pill-row">
@@ -2785,7 +2983,6 @@ async function setupProfilePage() {
           });
 
       state.currentUser = payload.profile;
-      hydrateUserPill();
       setPendingToast('Profile updated successfully.');
       redirectTo(consumeReturnPath(PROFILE_RETURN_PATH_KEY, 'dashboard.html'));
     } catch (error) {
@@ -2800,6 +2997,7 @@ async function setupProfilePage() {
 
 async function init() {
   await loadCurrentUser();
+  setupMobileMenus();
 
   if (protectedPages.has(page) && !ensureAuthenticated()) {
     return;

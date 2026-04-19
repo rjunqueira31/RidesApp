@@ -13,9 +13,21 @@
     <div class="shell shell-narrow">
       <header class="simple-topbar">
         <a href="index.html" class="brand-link">MyRides</a>
-        <nav class="marketing-actions">
+        <button type="button" class="mobile-menu-button" aria-expanded="false"
+          aria-controls="login-mobile-menu-panel" aria-label="Open navigation menu" data-mobile-menu-button>
+          <span class="visually-hidden">Menu</span>
+          <span class="mobile-menu-button-line"></span>
+          <span class="mobile-menu-button-line"></span>
+          <span class="mobile-menu-button-line"></span>
+        </button>
+        <nav class="marketing-actions" data-mobile-menu-desktop-actions>
           <a href="signup.html" class="button-link">Signup</a>
         </nav>
+        <div id="login-mobile-menu-panel" class="mobile-menu-panel" data-mobile-menu-panel hidden>
+          <nav class="mobile-menu-panel-actions">
+            <a href="signup.html" class="button-link">Signup</a>
+          </nav>
+        </div>
       </header>
 
       <main class="center-layout">
