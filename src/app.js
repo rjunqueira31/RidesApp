@@ -2,7 +2,9 @@ require('dotenv').config();
 
 const bcrypt = require('bcryptjs');
 const express = require('express');
+const http = require('http');
 const session = require('express-session');
+const {Server: SocketServer} = require('socket.io');
 const path = require('path');
 const {
   applySecurityMiddleware,
@@ -33,14 +35,22 @@ const {
   listRides,
   updateProfile,
   updateSeatRequest,
+  createDirectMessage,
+  getConversations,
+  getConversationMessages,
+  getUnreadCount,
+  markConversationRead,
 } = require('./store');
 
 const app = express();
+const server = http.createServer(app);
+const io = new SocketServer(server);
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 applySecurityMiddleware(app);
 
-app.use(createSessionMiddleware(session));
+const sessionMiddleware = createSessionMiddleware(session);
+app.use(sessionMiddleware);
 
 app.use(express.json());
 
@@ -567,9 +577,123 @@ app.post(
       }
     });
 
+// --- Direct messaging routes ---
+
+app.get(
+    '/api/dm/conversations', requireAuth, async (request, response, next) => {
+      try {
+        const conversations = await getConversations(request.currentUser.id);
+        response.json({conversations});
+      } catch (error) {
+        next(error);
+      }
+    });
+
+app.get(
+    '/api/dm/unread-count', requireAuth, async (request, response, next) => {
+      try {
+        const count = await getUnreadCount(request.currentUser.id);
+        response.json({count});
+      } catch (error) {
+        next(error);
+      }
+    });
+
+app.get(
+    '/api/dm/conversations/:userId', requireAuth,
+    async (request, response, next) => {
+      try {
+        const messages = await getConversationMessages(
+            request.currentUser.id,
+            request.params.userId,
+            {
+              limit: Number(request.query.limit) || 50,
+              before: request.query.before,
+            },
+        );
+        response.json({messages});
+      } catch (error) {
+        next(error);
+      }
+    });
+
+app.post(
+    '/api/dm/conversations/:userId', requireAuth,
+    async (request, response, next) => {
+      try {
+        const {text} = request.body;
+        assertRequired(text, 'Message');
+
+        const dm = await createDirectMessage({
+          senderId: request.currentUser.id,
+          receiverId: request.params.userId,
+          text,
+        });
+
+        // Emit via Socket.io for real-time delivery
+        const io = request.app.get('io');
+        io.to(`user:${request.params.userId}`).emit('dm:new', dm);
+        io.to(`user:${request.currentUser.id}`).emit('dm:new', dm);
+
+        logger.info('dm.created', {
+          ...requestLogContext(request),
+          senderId: request.currentUser.id,
+          receiverId: request.params.userId,
+          messageId: dm.id,
+        });
+        response.status(201).json({message: dm});
+      } catch (error) {
+        next(error);
+      }
+    });
+
+app.post(
+    '/api/dm/conversations/:userId/read', requireAuth,
+    async (request, response, next) => {
+      try {
+        await markConversationRead(
+            request.currentUser.id, request.params.userId);
+
+        // Notify sender's other tabs that messages were read
+        const io = request.app.get('io');
+        io.to(`user:${request.currentUser.id}`).emit('dm:read', {
+          otherUserId: request.params.userId,
+        });
+
+        response.json({ok: true});
+      } catch (error) {
+        next(error);
+      }
+    });
+
 app.use(createErrorHandler({isProduction: isProduction()}));
 
-app.listen(PORT, () => {
+// --- Socket.io setup ---
+io.engine.use(sessionMiddleware);
+
+io.use((socket, next) => {
+  const userId = socket.request.session?.userId;
+  if (!userId) {
+    next(new Error('Authentication required.'));
+    return;
+  }
+  socket.userId = userId;
+  next();
+});
+
+io.on('connection', (socket) => {
+  socket.join(`user:${socket.userId}`);
+  logger.info('socket.connected', {userId: socket.userId});
+
+  socket.on('disconnect', () => {
+    logger.info('socket.disconnected', {userId: socket.userId});
+  });
+});
+
+// Make io accessible to routes
+app.set('io', io);
+
+server.listen(PORT, () => {
   logger.info('app.started', {
     port: Number(PORT),
     nodeEnv: process.env.NODE_ENV || 'development',

@@ -4,18 +4,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Dashboard · MyRides</title>
+  <title>Messages · MyRides</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 
-<body data-page="dashboard" class="app-body">
+<body data-page="messages" class="app-body">
   <div class="shell shell-wide">
     <header class="app-topbar">
       <a href="index.html" class="brand-link">MyRides</a>
-      <button type="button" class="mobile-menu-button" aria-expanded="false" aria-controls="dashboard-mobile-menu-panel"
+      <button type="button" class="mobile-menu-button" aria-expanded="false" aria-controls="messages-mobile-menu-panel"
         aria-label="Open navigation menu" data-mobile-menu-button>
         <span class="visually-hidden">Menu</span>
         <span class="mobile-menu-button-line"></span>
@@ -31,7 +31,7 @@
         <a href="profile.html" class="nav-link">Profile</a>
         <button type="button" id="logout-button" class="button-secondary">Logout</button>
       </div>
-      <div id="dashboard-mobile-menu-panel" class="mobile-menu-panel" data-mobile-menu-panel hidden>
+      <div id="messages-mobile-menu-panel" class="mobile-menu-panel" data-mobile-menu-panel hidden>
         <div class="mobile-menu-panel-actions">
           <a href="dashboard.html" class="nav-link">Dashboard</a>
           <a href="messages.html" class="nav-link nav-link-messages">
@@ -44,41 +44,24 @@
       </div>
     </header>
 
-    <main>
-      <section class="hub-hero">
-        <h2>YOUR COMMUTE DASHBOARD</h2>
-      </section>
-
-      <div class="hub-grid">
-        <a href="create-ride.html" class="hub-card hub-primary">
-          <span class="hub-label">01</span>
-          <h2>Create a ride</h2>
-          <p>Publish a new route with time, seats, car, and notes.</p>
-        </a>
-        <a href="search-rides.html" class="hub-card">
-          <span class="hub-label">02</span>
-          <h2>Search rides</h2>
-          <p>Browse available rides, request seats, and join ride chat.</p>
-        </a>
-        <a href="my-rides.html" class="hub-card">
-          <span class="hub-label">03</span>
-          <h2>My rides</h2>
-          <p>See rides you are driving and rides you joined as a passenger.</p>
-        </a>
-        <a href="find-users.html" class="hub-card">
-          <span class="hub-label">04</span>
-          <h2>Find users</h2>
-          <p>Search users by name or email when you need to contact them.</p>
-        </a>
-        <a href="messages.html" class="hub-card">
-          <span class="hub-label">05</span>
+    <main class="dm-layout">
+      <aside class="dm-sidebar" id="dm-sidebar">
+        <div class="dm-sidebar-header">
           <h2>Messages</h2>
-          <p>Send and receive direct messages with other users.</p>
-        </a>
-      </div>
+        </div>
+        <div class="dm-conversation-list" id="dm-conversation-list">
+          <div class="empty-state">Loading conversations...</div>
+        </div>
+      </aside>
+      <section class="dm-chat" id="dm-chat">
+        <div class="dm-chat-placeholder">
+          <p class="meta">Select a conversation to start messaging</p>
+        </div>
+      </section>
     </main>
   </div>
 
+  <script src="/socket.io/socket.io.js"></script>
   <script src="app.js"></script>
 </body>
 

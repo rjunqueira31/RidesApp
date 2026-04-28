@@ -24,12 +24,20 @@
       </button>
       <div class="topbar-user" data-mobile-menu-desktop-actions>
         <a href="dashboard.html" class="nav-link">Dashboard</a>
+        <a href="messages.html" class="nav-link nav-link-messages">
+          Messages
+          <span class="nav-unread-badge" hidden></span>
+        </a>
         <a href="profile.html" class="nav-link">Profile</a>
         <button type="button" id="logout-button" class="button-secondary">Logout</button>
       </div>
       <div id="find-users-mobile-menu-panel" class="mobile-menu-panel" data-mobile-menu-panel hidden>
         <div class="mobile-menu-panel-actions">
           <a href="dashboard.html" class="nav-link">Dashboard</a>
+          <a href="messages.html" class="nav-link nav-link-messages">
+            Messages
+            <span class="nav-unread-badge" hidden></span>
+          </a>
           <a href="profile.html" class="nav-link">Profile</a>
           <button type="button" class="button-secondary" data-logout-button>Logout</button>
         </div>
@@ -43,7 +51,7 @@
         <p class="section-copy">Search by name, email, or user ID to quickly find who you need to contact.</p>
 
         <form id="find-users-form" class="toolbar search-toolbar user-search-toolbar">
-          <input type="text" name="query" placeholder="Search by name, email, or #A1B2C3" />
+          <input type="text" name="query" placeholder="Search by name, email, or user ID" />
           <button type="button" id="reset-user-search" class="button-secondary">Reset</button>
         </form>
 

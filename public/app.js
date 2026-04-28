@@ -1,7 +1,7 @@
 const page = document.body.dataset.page;
 const protectedPages = new Set([
   'dashboard', 'create-ride', 'search-rides', 'my-rides', 'find-users',
-  'profile', 'debug'
+  'profile', 'debug', 'messages'
 ]);
 
 const state = {
@@ -1513,6 +1513,19 @@ async function loadProfiles(searchQuery = '', options = {}) {
 }
 
 function renderUserSearchCard(profile) {
+  const isSelf = state.currentUser && state.currentUser.id === profile.id;
+  const messageButton = isSelf ?
+      '' :
+      `
+    <a href="messages.html?user=${
+          encodeURIComponent(
+              profile
+                  .id)}" class="dm-user-card-button" aria-label="Send message to ${
+          escapeHtml(profile.name)}" title="Send message">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    </a>
+  `;
+
   return `
     <article class="user-card">
       <div class="user-card-header">
@@ -1521,6 +1534,7 @@ function renderUserSearchCard(profile) {
       escapeHtml(profile.name || 'Unnamed user')} <span class="meta">- ${
       escapeHtml(profile.publicId || '—')}</span></h2>
         </div>
+        ${messageButton}
       </div>
       <p class="meta"><strong>Default office:</strong> ${
       escapeHtml(formatOfficeLocation(profile.defaultOffice) || '—')}</p>
@@ -1944,7 +1958,7 @@ async function setupDashboardPage() {
   if (hubGrid && userIsManager()) {
     hubGrid.insertAdjacentHTML('beforeend', `
           <a href="debug.html" class="hub-card">
-            <span class="hub-label">05</span>
+            <span class="hub-label">06</span>
             <h2>Debug data</h2>
             <p>Inspect all users, rides, requests, and ride chat data.</p>
           </a>
@@ -2995,6 +3009,365 @@ async function setupProfilePage() {
   });
 }
 
+// --- Direct Messaging ---
+
+async function fetchUnreadCount() {
+  try {
+    const payload = await api('/api/dm/unread-count');
+    return payload.count;
+  } catch {
+    return 0;
+  }
+}
+
+function updateUnreadBadges(count) {
+  document.querySelectorAll('.nav-unread-badge').forEach((badge) => {
+    if (count > 0) {
+      badge.hidden = false;
+      badge.textContent = count > 99 ? '99+' : String(count);
+    } else {
+      badge.hidden = true;
+      badge.textContent = '';
+    }
+  });
+}
+
+async function refreshUnreadBadges() {
+  if (!state.currentUser) return;
+  const count = await fetchUnreadCount();
+  updateUnreadBadges(count);
+}
+
+function formatDmTime(isoString) {
+  const date = new Date(isoString);
+  const now = new Date();
+  const isToday = date.toDateString() === now.toDateString();
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const isYesterday = date.toDateString() === yesterday.toDateString();
+
+  if (isToday) {
+    return date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+  }
+  if (isYesterday) {
+    return 'Yesterday';
+  }
+  return date.toLocaleDateString([], {month: 'short', day: 'numeric'});
+}
+
+function renderConversationItem(conversation, activeUserId) {
+  const user = conversation.user;
+  const lastMsg = conversation.lastMessage;
+  const isActive = user.id === activeUserId;
+  const unreadClass =
+      conversation.unreadCount > 0 ? ' dm-conversation-item-unread' : '';
+  const activeClass = isActive ? ' dm-conversation-item-active' : '';
+  const preview = lastMsg ? escapeHtml(lastMsg.text).slice(0, 60) : '';
+  const time = lastMsg ? formatDmTime(lastMsg.createdAt) : '';
+
+  return `
+    <button type="button" class="dm-conversation-item${unreadClass}${
+      activeClass}" data-dm-user-id="${escapeHtml(user.id)}">
+      <img src="images/icon_default_user.svg" alt="" class="dm-avatar" />
+      <div class="dm-conversation-item-body">
+        <div class="dm-conversation-item-header">
+          <strong class="dm-conversation-item-name">${
+      escapeHtml(user.name || 'Unnamed user')}</strong>
+          <span class="dm-conversation-item-time">${time}</span>
+        </div>
+        <div class="dm-conversation-item-preview">${preview}</div>
+      </div>
+      ${
+      conversation.unreadCount > 0 ?
+          `<span class="dm-conversation-item-badge">${
+              conversation.unreadCount > 99 ?
+                  '99+' :
+                  conversation.unreadCount}</span>` :
+          ''}
+    </button>
+  `;
+}
+
+function renderDmMessage(dm, currentUserId) {
+  const isMine = dm.senderId === currentUserId;
+  const sideClass = isMine ? 'dm-bubble-mine' : 'dm-bubble-theirs';
+
+  return `
+    <div class="dm-bubble ${sideClass}">
+      <div class="dm-bubble-text">${escapeHtml(dm.text)}</div>
+      <div class="dm-bubble-time">${formatDmTime(dm.createdAt)}</div>
+    </div>
+  `;
+}
+
+async function setupMessagesPage() {
+  const sidebar = document.querySelector('#dm-sidebar');
+  const conversationList = document.querySelector('#dm-conversation-list');
+  const chatArea = document.querySelector('#dm-chat');
+  let activeConversationUserId = null;
+  let conversations = [];
+
+  // Check URL for ?user=... to open a specific conversation
+  const urlParams = new URLSearchParams(window.location.search);
+  const targetUserId = urlParams.get('user');
+
+  // Connect socket for real-time
+  const socket = typeof io !== 'undefined' ? io() : null;
+
+  function renderConversationList() {
+    if (!conversations.length) {
+      conversationList.innerHTML =
+          '<div class="empty-state">No conversations yet.</div>';
+      return;
+    }
+    conversationList.innerHTML =
+        conversations
+            .map((c) => renderConversationItem(c, activeConversationUserId))
+            .join('');
+  }
+
+  function renderChatView(messages, otherUser) {
+    const messagesHtml = messages.length ?
+        messages.map((m) => renderDmMessage(m, state.currentUser.id)).join('') :
+        '<div class="empty-state">No messages yet. Say hello!</div>';
+
+    chatArea.innerHTML = `
+      <div class="dm-chat-header">
+        <button type="button" class="dm-back-button" id="dm-back-button" aria-label="Back to conversations">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        </button>
+        <div class="dm-chat-header-info">
+          <img src="images/icon_default_user.svg" alt="" class="dm-avatar" />
+          <strong>${escapeHtml(otherUser.name || 'Unnamed user')}</strong>
+          <span class="meta">${escapeHtml(otherUser.publicId || '')}</span>
+        </div>
+      </div>
+      <div class="dm-messages" id="dm-messages">${messagesHtml}</div>
+      <form class="dm-compose" id="dm-compose">
+        <input type="text" name="text" placeholder="Type a message..." autocomplete="off" />
+        <button type="submit" aria-label="Send message">
+          <img src="images/icon_send_message.svg" alt="" width="22" height="22" style="margin-left: 3px" />
+        </button>
+      </form>
+    `;
+
+    const messagesContainer = chatArea.querySelector('#dm-messages');
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    // Wire back button
+    chatArea.querySelector('#dm-back-button').addEventListener('click', () => {
+      activeConversationUserId = null;
+      sidebar.classList.remove('dm-sidebar-hidden');
+      chatArea.classList.remove('dm-chat-active');
+      renderConversationList();
+      // Clean URL
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, '', cleanUrl);
+    });
+
+    // Wire compose form
+    const composeForm = chatArea.querySelector('#dm-compose');
+    const composeInput = composeForm.querySelector('input[name="text"]');
+
+    composeForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const text = composeInput.value.trim();
+      if (!text) return;
+
+      composeInput.value = '';
+
+      try {
+        await api(`/api/dm/conversations/${activeConversationUserId}`, {
+          method: 'POST',
+          body: JSON.stringify({text}),
+        });
+      } catch (error) {
+        showToast(error.message, 'error');
+        composeInput.value = text;
+      }
+    });
+
+    composeInput.addEventListener('focus', async () => {
+      const conv =
+          conversations.find((c) => c.userId === activeConversationUserId);
+      if (conv && conv.unreadCount > 0) {
+        conv.unreadCount = 0;
+        renderConversationList();
+        await api(
+            `/api/dm/conversations/${activeConversationUserId}/read`,
+            {method: 'POST'});
+        refreshUnreadBadges();
+      }
+    });
+
+    composeInput.focus();
+  }
+
+  async function openConversation(userId) {
+    activeConversationUserId = userId;
+    sidebar.classList.add('dm-sidebar-hidden');
+    chatArea.classList.add('dm-chat-active');
+    chatArea.innerHTML =
+        '<div class="dm-chat-placeholder"><p class="meta">Loading messages...</p></div>';
+
+    try {
+      const payload = await api(`/api/dm/conversations/${userId}`);
+      const conv = conversations.find((c) => c.userId === userId);
+      const otherUser = conv ? conv.user : {id: userId, name: 'User'};
+
+      renderChatView(payload.messages, otherUser);
+
+      // Mark as read
+      if (conv && conv.unreadCount > 0) {
+        conv.unreadCount = 0;
+        renderConversationList();
+        await api(`/api/dm/conversations/${userId}/read`, {method: 'POST'});
+        refreshUnreadBadges();
+      }
+    } catch (error) {
+      chatArea.innerHTML = `<div class="dm-chat-placeholder"><p class="meta">${
+          escapeHtml(error.message)}</p></div>`;
+    }
+  }
+
+  async function loadConversations() {
+    try {
+      const payload = await api('/api/dm/conversations');
+      conversations = payload.conversations;
+      renderConversationList();
+    } catch (error) {
+      conversationList.innerHTML =
+          `<div class="empty-state">${escapeHtml(error.message)}</div>`;
+    }
+  }
+
+  // Click on conversation item
+  conversationList.addEventListener('click', (event) => {
+    const item = event.target.closest('[data-dm-user-id]');
+    if (!item) return;
+    openConversation(item.dataset.dmUserId);
+  });
+
+  // Socket.io real-time incoming messages
+  if (socket) {
+    socket.on('dm:new', (dm) => {
+      const otherUserId =
+          dm.senderId === state.currentUser.id ? dm.receiverId : dm.senderId;
+
+      // Update conversation list
+      const existingConv = conversations.find((c) => c.userId === otherUserId);
+      if (existingConv) {
+        existingConv.lastMessage = dm;
+        if (dm.receiverId === state.currentUser.id &&
+            otherUserId !== activeConversationUserId) {
+          existingConv.unreadCount += 1;
+        }
+        // Move to top
+        conversations =
+            [existingConv, ...conversations.filter((c) => c !== existingConv)];
+      } else {
+        const otherUser =
+            dm.senderId === state.currentUser.id ? dm.receiver : dm.sender;
+        conversations.unshift({
+          userId: otherUserId,
+          user: otherUser,
+          lastMessage: dm,
+          unreadCount: dm.receiverId === state.currentUser.id ? 1 : 0,
+        });
+      }
+      renderConversationList();
+
+      // If this conversation is active, append the message
+      if (otherUserId === activeConversationUserId) {
+        const messagesContainer = chatArea.querySelector('#dm-messages');
+        if (messagesContainer) {
+          // Remove empty state if present
+          const emptyState = messagesContainer.querySelector('.empty-state');
+          if (emptyState) emptyState.remove();
+
+          messagesContainer.insertAdjacentHTML(
+              'beforeend', renderDmMessage(dm, state.currentUser.id));
+          messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+          // Mark as read if received
+          if (dm.receiverId === state.currentUser.id) {
+            const conv = conversations.find((c) => c.userId === otherUserId);
+            if (conv) conv.unreadCount = 0;
+            renderConversationList();
+            api(`/api/dm/conversations/${otherUserId}/read`, {method: 'POST'});
+          }
+        }
+      }
+
+      refreshUnreadBadges();
+    });
+
+    socket.on('dm:read', ({otherUserId}) => {
+      const conv = conversations.find((c) => c.userId === otherUserId);
+      if (conv) {
+        conv.unreadCount = 0;
+        renderConversationList();
+      }
+    });
+  }
+
+  // Initial load
+  await loadConversations();
+
+  // If we have a target user, open or create that conversation
+  if (targetUserId) {
+    const existingConv = conversations.find((c) => c.userId === targetUserId);
+    if (existingConv) {
+      openConversation(targetUserId);
+    } else {
+      // User might not have a conversation yet, try to load their profile
+      try {
+        const profiles = await loadProfiles('', {});
+        const targetUser =
+            (state.profiles || []).find((p) => p.id === targetUserId);
+        if (targetUser) {
+          conversations.unshift({
+            userId: targetUser.id,
+            user: targetUser,
+            lastMessage: null,
+            unreadCount: 0,
+          });
+          renderConversationList();
+        }
+        openConversation(targetUserId);
+      } catch {
+        openConversation(targetUserId);
+      }
+    }
+  }
+
+  // Poll conversations and active chat every 20 seconds
+  setInterval(async () => {
+    await loadConversations();
+    if (activeConversationUserId) {
+      try {
+        const payload =
+            await api(`/api/dm/conversations/${activeConversationUserId}`);
+        const messagesContainer = chatArea.querySelector('#dm-messages');
+        if (messagesContainer) {
+          const wasAtBottom = messagesContainer.scrollHeight -
+                  messagesContainer.scrollTop - messagesContainer.clientHeight <
+              40;
+          messagesContainer.innerHTML = payload.messages.length ?
+              payload.messages
+                  .map((m) => renderDmMessage(m, state.currentUser.id))
+                  .join('') :
+              '<div class="empty-state">No messages yet. Say hello!</div>';
+          if (wasAtBottom) {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+          }
+        }
+      } catch { /* ignore polling errors */
+      }
+    }
+  }, 20000);
+}
+
 async function init() {
   await loadCurrentUser();
   setupMobileMenus();
@@ -3035,6 +3408,9 @@ async function init() {
     case 'find-users':
       await setupFindUsersPage();
       break;
+    case 'messages':
+      await setupMessagesPage();
+      break;
     case 'debug':
       await setupDebugPage();
       break;
@@ -3043,6 +3419,12 @@ async function init() {
       break;
     default:
       break;
+  }
+
+  // Poll unread badge count periodically for all authenticated pages
+  if (state.currentUser) {
+    refreshUnreadBadges();
+    setInterval(refreshUnreadBadges, 20000);
   }
 }
 

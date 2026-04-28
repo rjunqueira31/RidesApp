@@ -723,6 +723,146 @@ async function createMessage({rideId, senderEmail, senderId, text}) {
   };
 }
 
+function toPublicDirectMessage(dm) {
+  return {
+    id: dm.id,
+    senderId: dm.senderId,
+    receiverId: dm.receiverId,
+    text: dm.text,
+    read: dm.read,
+    createdAt: toIsoString(dm.createdAt),
+    sender: toPublicProfile(dm.sender),
+    receiver: toPublicProfile(dm.receiver),
+  };
+}
+
+async function createDirectMessage({senderId, receiverId, text}) {
+  const normalizedText = normalizeText(text);
+  if (!normalizedText) {
+    throw new Error('Message text is required.');
+  }
+
+  const sender = await getUserById(senderId);
+  if (!sender) {
+    throw new Error('Sender not found.');
+  }
+
+  const receiver = await getUserById(receiverId);
+  if (!receiver) {
+    throw new Error('Recipient not found.');
+  }
+
+  if (sender.id === receiver.id) {
+    throw new Error('You cannot message yourself.');
+  }
+
+  const dm = await prisma.directMessage.create({
+    data: {
+      senderId: sender.id,
+      receiverId: receiver.id,
+      text: normalizedText,
+    },
+    include: {
+      sender: true,
+      receiver: true,
+    },
+  });
+
+  return toPublicDirectMessage(dm);
+}
+
+async function getConversations(userId) {
+  // Get all DMs where user is sender or receiver, ordered by newest first
+  const messages = await prisma.directMessage.findMany({
+    where: {
+      OR: [
+        {senderId: userId},
+        {receiverId: userId},
+      ],
+    },
+    include: {
+      sender: true,
+      receiver: true,
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  });
+
+  // Group by the other user to build conversation list
+  const conversationMap = new Map();
+
+  for (const dm of messages) {
+    const otherUserId = dm.senderId === userId ? dm.receiverId : dm.senderId;
+
+    if (!conversationMap.has(otherUserId)) {
+      const otherUser = dm.senderId === userId ? dm.receiver : dm.sender;
+      const unreadCount = dm.receiverId === userId && !dm.read ? 1 : 0;
+
+      conversationMap.set(otherUserId, {
+        userId: otherUserId,
+        user: toPublicProfile(otherUser),
+        lastMessage: toPublicDirectMessage(dm),
+        unreadCount,
+      });
+    } else if (dm.receiverId === userId && !dm.read) {
+      conversationMap.get(otherUserId).unreadCount += 1;
+    }
+  }
+
+  return [...conversationMap.values()];
+}
+
+async function getConversationMessages(
+    userId, otherUserId, {limit = 50, before} = {}) {
+  const where = {
+    OR: [
+      {senderId: userId, receiverId: otherUserId},
+      {senderId: otherUserId, receiverId: userId},
+    ],
+  };
+
+  if (before) {
+    where.createdAt = {lt: new Date(before)};
+  }
+
+  const messages = await prisma.directMessage.findMany({
+    where,
+    include: {
+      sender: true,
+      receiver: true,
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+    take: limit,
+  });
+
+  return messages.reverse().map(toPublicDirectMessage);
+}
+
+async function getUnreadCount(userId) {
+  return prisma.directMessage.count({
+    where: {
+      receiverId: userId,
+      read: false,
+    },
+  });
+}
+
+async function markConversationRead(userId, otherUserId) {
+  await prisma.directMessage.updateMany({
+    where: {
+      senderId: otherUserId,
+      receiverId: userId,
+      read: false,
+    },
+    data: {
+      read: true,
+    },
+  });
+}
+
 module.exports = {
   cancelSeatRequest,
   createMessage,
@@ -737,4 +877,9 @@ module.exports = {
   listRides,
   updateProfile,
   updateSeatRequest,
+  createDirectMessage,
+  getConversations,
+  getConversationMessages,
+  getUnreadCount,
+  markConversationRead,
 };

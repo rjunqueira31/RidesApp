@@ -41,6 +41,8 @@ model User {
   ridesDriven  Ride[]    @relation("RideDriver")
   seatRequests SeatRequest[]
   messages     Message[]
+  directMessagesSent     DirectMessage[] @relation("DirectMessagesSent")
+  directMessagesReceived DirectMessage[] @relation("DirectMessagesReceived")
 }
 
 model Ride {
@@ -93,6 +95,22 @@ model Message {
 
   @@index([rideId])
   @@index([senderId])
+}
+
+model DirectMessage {
+  id         String   @id @default(cuid())
+  senderId   String
+  receiverId String
+  text       String
+  read       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  sender     User     @relation("DirectMessagesSent", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver   User     @relation("DirectMessagesReceived", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@index([senderId, receiverId])
+  @@index([receiverId, read])
+  @@index([createdAt])
 }
 
 model Session {
