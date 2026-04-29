@@ -19,15 +19,11 @@ function applySecurityMiddleware(app) {
 function createSessionMiddleware(session) {
   const pgSession = connectPgSimple(session);
 
-  const port = process.env.PORT || '3000';
-  const cookieName = port === '3000' ? 'connect.sid' : `connect.sid.${port}`;
-
   return session({
     store: new pgSession({
       conString: process.env.DATABASE_URL,
       createTableIfMissing: true,
     }),
-    name: cookieName,
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,

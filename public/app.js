@@ -3205,6 +3205,7 @@ async function setupMessagesPage() {
 
   async function openConversation(userId) {
     activeConversationUserId = userId;
+    renderConversationList();
     sidebar.classList.add('dm-sidebar-hidden');
     chatArea.classList.add('dm-chat-active');
     chatArea.innerHTML =
