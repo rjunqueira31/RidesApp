@@ -1,15 +1,13 @@
 const page = document.body.dataset.page;
 const protectedPages = new Set([
   'dashboard', 'create-ride', 'search-rides', 'my-rides', 'find-users',
-  'profile', 'debug', 'messages'
+  'profile', 'messages'
 ]);
 
 const state = {
   currentUser: null,
   clientConfig: null,
   clientConfigPromise: null,
-  profiles: [],
-  rides: [],
   filters: {
     driver: '',
     start: '',
@@ -244,6 +242,191 @@ async function loadClientConfig() {
   return state.clientConfigPromise;
 }
 
+function formatDateTime(value) {
+  if (!value) {
+    return '—';
+  }
+
+  return new Intl
+      .DateTimeFormat(undefined, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      })
+      .format(new Date(value));
+}
+
+function formatCalendarDate(value) {
+  return new Intl
+      .DateTimeFormat(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
+      .format(new Date(value));
+}
+
+function formatClockTime(value) {
+  return new Intl
+      .DateTimeFormat(undefined, {
+        hour: 'numeric',
+        minute: '2-digit',
+      })
+      .format(new Date(value));
+}
+
+function getCalendarDayKey(value) {
+  const parts = new Intl
+                    .DateTimeFormat(undefined, {
+                      year: 'numeric',
+                      month: 'numeric',
+                      day: 'numeric',
+                    })
+                    .formatToParts(new Date(value));
+
+  const year = parts.find((part) => part.type === 'year')?.value || '';
+  const month = parts.find((part) => part.type === 'month')?.value || '';
+  const day = parts.find((part) => part.type === 'day')?.value || '';
+
+  return `${year}-${month}-${day}`;
+}
+
+function isSameCalendarDay(leftValue, rightValue) {
+  return getCalendarDayKey(leftValue) === getCalendarDayKey(rightValue);
+}
+
+function formatDateTimeRange(startValue, endValue) {
+  if (!startValue || !endValue) {
+    return startValue ? formatDateTime(startValue) : '—';
+  }
+
+  if (isSameCalendarDay(startValue, endValue)) {
+    return `${formatCalendarDate(startValue)}, ${
+        formatClockTime(startValue)} - ${formatClockTime(endValue)}`;
+  }
+
+  return `${formatDateTime(startValue)}
+${formatDateTime(endValue)}`;
+}
+
+function formatDateForInput(date) {
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 10);
+}
+
+function formatTimeForInput(date) {
+  return `${String(date.getHours()).padStart(2, '0')}:${
+      String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function combineDateAndTime(dateValue, timeValue) {
+  return `${dateValue}T${timeValue}`;
+}
+
+function parseTimeValueToMinutes(timeValue) {
+  const [hours, minutes] =
+      String(timeValue || '').split(':').map((value) => Number(value));
+
+  if ([hours, minutes].some((value) => Number.isNaN(value))) {
+    return null;
+  }
+
+  return hours * 60 + minutes;
+}
+
+function shouldTreatEndTimeAsNextDay(startTime, endTime) {
+  const startMinutes = parseTimeValueToMinutes(startTime);
+  const endMinutes = parseTimeValueToMinutes(endTime);
+
+  if (startMinutes === null || endMinutes === null ||
+      endMinutes > startMinutes) {
+    return false;
+  }
+
+  return startMinutes >= 22 * 60 && startMinutes - endMinutes > 20 * 60;
+}
+
+function floorToMinute(date) {
+  const normalized = new Date(date);
+  normalized.setSeconds(0, 0);
+  return normalized;
+}
+
+function roundUpToNextMinute(date) {
+  const rounded = floorToMinute(date);
+
+  if (date.getSeconds() !== 0 || date.getMilliseconds() !== 0) {
+    rounded.setMinutes(rounded.getMinutes() + 1);
+  }
+
+  return rounded;
+}
+
+function addMinutesToTime(timeValue, minutesToAdd) {
+  const [hours, minutes] =
+      String(timeValue || '').split(':').map((value) => Number(value));
+
+  if ([hours, minutes].some((value) => Number.isNaN(value))) {
+    return '';
+  }
+
+  const totalMinutes = hours * 60 + minutes + minutesToAdd;
+  const normalizedMinutes =
+      ((totalMinutes % (24 * 60)) + (24 * 60)) % (24 * 60);
+  const nextHours = String(Math.floor(normalizedMinutes / 60)).padStart(2, '0');
+  const nextMinutes = String(normalizedMinutes % 60).padStart(2, '0');
+
+  return `${nextHours}:${nextMinutes}`;
+}
+
+function validateRideDateTime(dateValue, startTime, endTime) {
+  const start = new Date(combineDateAndTime(dateValue, startTime));
+  const end = new Date(combineDateAndTime(dateValue, endTime));
+  const now = floorToMinute(new Date());
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    throw new Error('Please choose a valid departure window.');
+  }
+
+  if (shouldTreatEndTimeAsNextDay(startTime, endTime)) {
+    end.setDate(end.getDate() + 1);
+  }
+
+  if (start.getTime() < now.getTime()) {
+    throw new Error('Earliest departure must be in the future.');
+  }
+
+  if (end.getTime() <= start.getTime()) {
+    throw new Error('Latest departure must be later than earliest departure.');
+  }
+
+  return {
+    startWindowStart: start.toISOString(),
+    startWindowEnd: end.toISOString(),
+  };
+}
+
+function syncRideTimeConstraints(dateInput, startTimeInput, endTimeInput) {
+  const now = new Date();
+  const today = formatDateForInput(now);
+  const isToday = dateInput.value === today;
+
+  if (isToday) {
+    const minStartTime = formatTimeForInput(floorToMinute(now));
+
+    if (!startTimeInput.value) {
+      startTimeInput.value = minStartTime;
+    }
+  }
+
+  if (!endTimeInput.value) {
+    endTimeInput.value = addMinutesToTime(startTimeInput.value, 60);
+  }
+}
+
+function redirectTo(path) {
+  window.location.href = path;
+}
 async function fetchMapboxLocationSuggestions(query, signal) {
   const config = await loadClientConfig();
   const token = String(config?.mapboxPublicToken || '').trim();
@@ -540,229 +723,6 @@ function initializeLocationAutocomplete(input) {
     clearResults();
   });
 }
-
-function formatDateTime(value) {
-  if (!value) {
-    return '—';
-  }
-
-  return new Intl
-      .DateTimeFormat(undefined, {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-      })
-      .format(new Date(value));
-}
-
-function formatCalendarDate(value) {
-  return new Intl
-      .DateTimeFormat(undefined, {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      })
-      .format(new Date(value));
-}
-
-function formatClockTime(value) {
-  return new Intl
-      .DateTimeFormat(undefined, {
-        hour: 'numeric',
-        minute: '2-digit',
-      })
-      .format(new Date(value));
-}
-
-function getCalendarDayKey(value) {
-  const parts = new Intl
-                    .DateTimeFormat(undefined, {
-                      year: 'numeric',
-                      month: 'numeric',
-                      day: 'numeric',
-                    })
-                    .formatToParts(new Date(value));
-
-  const year = parts.find((part) => part.type === 'year')?.value || '';
-  const month = parts.find((part) => part.type === 'month')?.value || '';
-  const day = parts.find((part) => part.type === 'day')?.value || '';
-
-  return `${year}-${month}-${day}`;
-}
-
-function isSameCalendarDay(leftValue, rightValue) {
-  return getCalendarDayKey(leftValue) === getCalendarDayKey(rightValue);
-}
-
-function formatDateTimeRange(startValue, endValue) {
-  if (!startValue || !endValue) {
-    return startValue ? formatDateTime(startValue) : '—';
-  }
-
-  if (isSameCalendarDay(startValue, endValue)) {
-    return `${formatCalendarDate(startValue)}, ${
-        formatClockTime(startValue)} - ${formatClockTime(endValue)}`;
-  }
-
-  return `${formatDateTime(startValue)}
-${formatDateTime(endValue)}`;
-}
-
-function formatDateForInput(date) {
-  return new Date(date.getTime() - date.getTimezoneOffset() * 60000)
-      .toISOString()
-      .slice(0, 10);
-}
-
-function formatTimeForInput(date) {
-  return `${String(date.getHours()).padStart(2, '0')}:${
-      String(date.getMinutes()).padStart(2, '0')}`;
-}
-
-function combineDateAndTime(dateValue, timeValue) {
-  return `${dateValue}T${timeValue}`;
-}
-
-function parseTimeValueToMinutes(timeValue) {
-  const [hours, minutes] =
-      String(timeValue || '').split(':').map((value) => Number(value));
-
-  if ([hours, minutes].some((value) => Number.isNaN(value))) {
-    return null;
-  }
-
-  return hours * 60 + minutes;
-}
-
-function shouldTreatEndTimeAsNextDay(startTime, endTime) {
-  const startMinutes = parseTimeValueToMinutes(startTime);
-  const endMinutes = parseTimeValueToMinutes(endTime);
-
-  if (startMinutes === null || endMinutes === null ||
-      endMinutes > startMinutes) {
-    return false;
-  }
-
-  return startMinutes >= 22 * 60 && startMinutes - endMinutes > 20 * 60;
-}
-
-function floorToMinute(date) {
-  const normalized = new Date(date);
-  normalized.setSeconds(0, 0);
-  return normalized;
-}
-
-function roundUpToNextMinute(date) {
-  const rounded = floorToMinute(date);
-
-  if (date.getSeconds() !== 0 || date.getMilliseconds() !== 0) {
-    rounded.setMinutes(rounded.getMinutes() + 1);
-  }
-
-  return rounded;
-}
-
-function addMinutesToTime(timeValue, minutesToAdd) {
-  const [hours, minutes] =
-      String(timeValue || '').split(':').map((value) => Number(value));
-
-  if ([hours, minutes].some((value) => Number.isNaN(value))) {
-    return '';
-  }
-
-  const totalMinutes = hours * 60 + minutes + minutesToAdd;
-  const normalizedMinutes =
-      ((totalMinutes % (24 * 60)) + (24 * 60)) % (24 * 60);
-  const nextHours = String(Math.floor(normalizedMinutes / 60)).padStart(2, '0');
-  const nextMinutes = String(normalizedMinutes % 60).padStart(2, '0');
-
-  return `${nextHours}:${nextMinutes}`;
-}
-
-function validateRideDateTime(dateValue, startTime, endTime) {
-  const start = new Date(combineDateAndTime(dateValue, startTime));
-  const end = new Date(combineDateAndTime(dateValue, endTime));
-  const now = floorToMinute(new Date());
-
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-    throw new Error('Please choose a valid departure window.');
-  }
-
-  if (shouldTreatEndTimeAsNextDay(startTime, endTime)) {
-    end.setDate(end.getDate() + 1);
-  }
-
-  if (start.getTime() < now.getTime()) {
-    throw new Error('Earliest departure must be in the future.');
-  }
-
-  if (end.getTime() <= start.getTime()) {
-    throw new Error('Latest departure must be later than earliest departure.');
-  }
-
-  return {
-    startWindowStart: start.toISOString(),
-    startWindowEnd: end.toISOString(),
-  };
-}
-
-function syncRideTimeConstraints(dateInput, startTimeInput, endTimeInput) {
-  const now = new Date();
-  const today = formatDateForInput(now);
-  const isToday = dateInput.value === today;
-
-  if (isToday) {
-    const minStartTime = formatTimeForInput(floorToMinute(now));
-
-    if (!startTimeInput.value) {
-      startTimeInput.value = minStartTime;
-    }
-  }
-
-  if (!endTimeInput.value) {
-    endTimeInput.value = addMinutesToTime(startTimeInput.value, 60);
-  }
-}
-
-function redirectTo(path) {
-  window.location.href = path;
-}
-
-function ensureNotesModal() {
-  let modal = document.querySelector('#notes-modal');
-  if (modal) {
-    return modal;
-  }
-
-  document.body.insertAdjacentHTML('beforeend', `
-    <div id="notes-modal" class="notes-modal" hidden>
-      <div class="notes-modal-backdrop" data-close-notes-modal="true"></div>
-      <div class="notes-modal-panel" role="dialog" aria-modal="true" aria-labelledby="notes-modal-title">
-        <div class="notes-modal-header">
-          <h2 id="notes-modal-title">Ride notes</h2>
-          <button type="button" class="button-secondary notes-modal-close" data-close-notes-modal="true" aria-label="Close notes">Close</button>
-        </div>
-        <div id="notes-modal-content" class="notes-modal-content"></div>
-      </div>
-    </div>
-  `);
-
-  modal = document.querySelector('#notes-modal');
-  modal.addEventListener('click', (event) => {
-    if (event.target.closest('[data-close-notes-modal="true"]')) {
-      modal.hidden = true;
-    }
-  });
-
-  return modal;
-}
-
-function openNotesModal(notesText) {
-  const modal = ensureNotesModal();
-  const content = modal.querySelector('#notes-modal-content');
-  content.textContent = notesText;
-  modal.hidden = false;
-}
-
 let activeRideDetailsRefresh = null;
 let pendingRidePublish = null;
 
@@ -865,7 +825,7 @@ function ensureRideDetailsModal() {
       return;
     }
 
-    const chatForm = event.target.closest('.chat-form');
+    const chatForm = event.target.closest('.chat-compose');
     if (!chatForm) {
       return;
     }
@@ -886,6 +846,10 @@ function ensureRideDetailsModal() {
         body: JSON.stringify({text}),
       });
       await refreshRideDetailsModal();
+      const chatMsgs = modal.querySelector('.chat-messages');
+      if (chatMsgs) {
+        chatMsgs.scrollTop = chatMsgs.scrollHeight;
+      }
       if (activeRideDetailsRefresh) {
         await activeRideDetailsRefresh();
       }
@@ -902,15 +866,10 @@ function renderRideDetailsContent(ride) {
   const isDriver = state.currentUser && ride.driverId === state.currentUser.id;
   const currentRequest = getCurrentUserRequest(ride);
   const driverName = ride.driver?.name || ride.driverEmail;
-  const notes = String(ride.notes || '').trim() || 'No notes for this ride.';
+  const notes = String(ride.notes || '').trim();
 
   return `
     <div class="ride-details-summary">
-     <div class="ride-details-grid-driver">
-        <strong>Driver:</strong>
-        <div class="ride-details-grid-driver-name">${
-      escapeHtml(driverName)}</div>
-      </div>
       <div class="card-grid ride-details-grid">
         <div class="ride-details-grid-window">
           <strong>Window</strong>
@@ -926,13 +885,12 @@ function renderRideDetailsContent(ride) {
           <strong>Seats left</strong>
           <div class="meta">${ride.seatsLeft} / ${ride.seatsTotal}</div>
         </div>
-        <div class="ride-details-grid-requests">
-          <strong>Requests</strong>
-          <div class="meta">${ride.requests.length}</div>
+        <div class="ride-details-grid-driver">
+          <strong>Driver</strong>
+          <div class="meta">${escapeHtml(driverName)}</div>
         </div>
       </div>
       <div class="pill-row">
-        ${renderRideAvailabilityPill(ride)}
         ${
       currentRequest ?
           `<span class="pill status-${currentRequest.status}">Your request: ${
@@ -944,10 +902,12 @@ function renderRideDetailsContent(ride) {
   })}
     </div>
 
-    <section class="ride-details-section">
+    ${
+      notes ? `<section class="ride-details-section">
       <h3>Notes</h3>
       <div class="ride-details-notes">${escapeHtml(notes)}</div>
-    </section>
+    </section>` :
+              ''}
 
     ${isDriver ? renderDriverRequests(ride) : ''}
     ${renderChat(ride)}
@@ -1180,7 +1140,7 @@ function openRideCreatedModal(ride) {
 }
 
 function deleteCurrentAccount() {
-  return api('/api/profile', {
+  return api('/api/profiles', {
     method: 'DELETE',
   });
 }
@@ -1302,6 +1262,448 @@ function swapLocationFieldValues(
 
   setLocationFieldValue(firstFieldName, secondValue, scope);
   setLocationFieldValue(secondFieldName, firstValue, scope);
+}
+async function fetchUnreadCount() {
+  try {
+    const payload = await api('/api/dm/unread-count');
+    return payload.count;
+  } catch {
+    return 0;
+  }
+}
+
+function updateUnreadBadges(count) {
+  document.querySelectorAll('.nav-unread-badge').forEach((badge) => {
+    if (count > 0) {
+      badge.hidden = false;
+      badge.textContent = count > 99 ? '99+' : String(count);
+    } else {
+      badge.hidden = true;
+      badge.textContent = '';
+    }
+  });
+}
+
+async function refreshUnreadBadges() {
+  if (!state.currentUser) return;
+  const count = await fetchUnreadCount();
+  updateUnreadBadges(count);
+}
+
+function formatDmTime(isoString) {
+  const date = new Date(isoString);
+  const now = new Date();
+  const isToday = date.toDateString() === now.toDateString();
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const isYesterday = date.toDateString() === yesterday.toDateString();
+
+  if (isToday) {
+    return date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+  }
+  if (isYesterday) {
+    return 'Yesterday';
+  }
+  return date.toLocaleDateString([], {month: 'short', day: 'numeric'});
+}
+
+function renderConversationItem(conversation, activeUserId) {
+  const user = conversation.user;
+  const lastMsg = conversation.lastMessage;
+  const isActive = user.id === activeUserId;
+  const unreadClass =
+      conversation.unreadCount > 0 ? ' dm-conversation-item-unread' : '';
+  const activeClass = isActive ? ' dm-conversation-item-active' : '';
+  const preview = lastMsg ? escapeHtml(lastMsg.text).slice(0, 60) : '';
+  const time = lastMsg ? formatDmTime(lastMsg.createdAt) : '';
+
+  return `
+    <button type="button" class="dm-conversation-item${unreadClass}${
+      activeClass}" data-dm-user-id="${escapeHtml(user.id)}">
+      <img src="images/icon_default_user.svg" alt="" class="dm-avatar" />
+      <div class="dm-conversation-item-body">
+        <div class="dm-conversation-item-header">
+          <strong class="dm-conversation-item-name">${
+      escapeHtml(user.name || 'Unnamed user')}</strong>
+          <span class="dm-conversation-item-time">${time}</span>
+        </div>
+        <div class="dm-conversation-item-preview">${preview}</div>
+      </div>
+      ${
+      conversation.unreadCount > 0 ?
+          `<span class="dm-conversation-item-badge">${
+              conversation.unreadCount > 99 ?
+                  '99+' :
+                  conversation.unreadCount}</span>` :
+          ''}
+    </button>
+  `;
+}
+
+function renderDmMessage(dm, currentUserId) {
+  const isMine = dm.senderId === currentUserId;
+  const sideClass = isMine ? 'dm-bubble-mine' : 'dm-bubble-theirs';
+
+  return `
+    <div class="dm-bubble ${sideClass}">
+      <div class="dm-bubble-text">${escapeHtml(dm.text)}</div>
+      <div class="dm-bubble-time">${formatDmTime(dm.createdAt)}</div>
+    </div>
+  `;
+}
+
+async function setupMessagesPage() {
+  const sidebar = document.querySelector('#dm-sidebar');
+  const conversationList = document.querySelector('#dm-conversation-list');
+  const chatArea = document.querySelector('#dm-chat');
+  let activeConversationUserId = null;
+  let conversations = [];
+
+  // Check URL for ?user=... to open a specific conversation
+  const urlParams = new URLSearchParams(window.location.search);
+  const targetUserId = urlParams.get('user');
+
+  // Connect socket for real-time
+  const socket = typeof io !== 'undefined' ? io() : null;
+
+  // --- User search for starting new chats ---
+  const dmSearchInput = document.querySelector('#dm-search-input');
+  const dmSearchResults = document.querySelector('#dm-search-results');
+  let searchController = null;
+
+  const clearSearchResults = () => {
+    dmSearchResults.innerHTML = '';
+    dmSearchResults.hidden = true;
+  };
+
+  const scheduleUserSearch = debounce(async () => {
+    const query = dmSearchInput.value.trim();
+    if (query.length < 1) {
+      clearSearchResults();
+      return;
+    }
+
+    searchController?.abort();
+    const controller = new AbortController();
+    searchController = controller;
+
+    try {
+      const profiles = await loadProfiles(query, {signal: controller.signal});
+      if (searchController !== controller) return;
+
+      const filtered =
+          (profiles || [])
+              .filter(
+                  (p) => !state.currentUser || p.id !== state.currentUser.id);
+
+      if (!filtered.length) {
+        dmSearchResults.innerHTML =
+            '<div class="dm-search-empty">No users found</div>';
+        dmSearchResults.hidden = false;
+        return;
+      }
+
+      dmSearchResults.innerHTML = filtered
+                                      .map(
+                                          (p) => `
+        <button type="button" class="dm-search-result-item" data-user-id="${
+                                              escapeHtml(p.id)}">
+          <strong>${escapeHtml(p.name || 'Unnamed user')}</strong>
+          <span class="meta">${escapeHtml(p.publicId || p.email || '')}</span>
+        </button>
+      `).join('');
+      dmSearchResults.hidden = false;
+    } catch (error) {
+      if (error.name === 'AbortError') return;
+      clearSearchResults();
+    }
+  }, 300);
+
+  if (dmSearchInput) {
+    dmSearchInput.addEventListener('input', scheduleUserSearch);
+
+    dmSearchResults.addEventListener('click', (event) => {
+      const item = event.target.closest('[data-user-id]');
+      if (!item) return;
+      const userId = item.dataset.userId;
+      dmSearchInput.value = '';
+      clearSearchResults();
+
+      // If conversation already exists, just open it
+      const existingConv = conversations.find((c) => c.userId === userId);
+      if (!existingConv) {
+        // Add a placeholder conversation
+        const name = item.querySelector('strong')?.textContent || 'User';
+        conversations.unshift({
+          userId,
+          user: {id: userId, name},
+          lastMessage: null,
+          unreadCount: 0,
+        });
+        renderConversationList();
+      }
+      openConversation(userId);
+    });
+
+    document.addEventListener('click', (event) => {
+      if (!event.target.closest('#dm-search')) {
+        clearSearchResults();
+      }
+    });
+  }
+
+  function renderConversationList() {
+    if (!conversations.length) {
+      conversationList.innerHTML =
+          '<div class="empty-state">No conversations yet.</div>';
+      return;
+    }
+    conversationList.innerHTML =
+        conversations
+            .map((c) => renderConversationItem(c, activeConversationUserId))
+            .join('');
+  }
+
+  function renderChatView(messages, otherUser) {
+    const messagesHtml = messages.length ?
+        messages.map((m) => renderDmMessage(m, state.currentUser.id)).join('') :
+        '<div class="empty-state">No messages yet. Say hello!</div>';
+
+    chatArea.innerHTML = `
+      <div class="dm-chat-header">
+        <button type="button" class="dm-back-button" id="dm-back-button" aria-label="Back to conversations">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        </button>
+        <div class="dm-chat-header-info">
+          <img src="images/icon_default_user.svg" alt="" class="dm-avatar" />
+          <strong>${escapeHtml(otherUser.name || 'Unnamed user')}</strong>
+          <span class="meta">${escapeHtml(otherUser.publicId || '')}</span>
+        </div>
+      </div>
+      <div class="dm-messages" id="dm-messages">${messagesHtml}</div>
+      <form class="dm-compose" id="dm-compose">
+        <input type="text" name="text" placeholder="Type a message..." autocomplete="off" />
+        <button type="submit" aria-label="Send message">
+          <img src="images/icon_send_message.svg" alt="" width="22" height="22" style="margin-left: 3px" />
+        </button>
+      </form>
+    `;
+
+    const messagesContainer = chatArea.querySelector('#dm-messages');
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    // Wire back button
+    chatArea.querySelector('#dm-back-button').addEventListener('click', () => {
+      activeConversationUserId = null;
+      sidebar.classList.remove('dm-sidebar-hidden');
+      chatArea.classList.remove('dm-chat-active');
+      renderConversationList();
+      // Clean URL
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, '', cleanUrl);
+    });
+
+    // Wire compose form
+    const composeForm = chatArea.querySelector('#dm-compose');
+    const composeInput = composeForm.querySelector('input[name="text"]');
+
+    composeForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const text = composeInput.value.trim();
+      if (!text) return;
+
+      composeInput.value = '';
+
+      try {
+        await api(`/api/dm/conversations/${activeConversationUserId}`, {
+          method: 'POST',
+          body: JSON.stringify({text}),
+        });
+      } catch (error) {
+        showToast(error.message, 'error');
+        composeInput.value = text;
+      }
+    });
+
+    composeInput.addEventListener('focus', async () => {
+      const conv =
+          conversations.find((c) => c.userId === activeConversationUserId);
+      if (conv && conv.unreadCount > 0) {
+        conv.unreadCount = 0;
+        renderConversationList();
+        await api(
+            `/api/dm/conversations/${activeConversationUserId}/read`,
+            {method: 'POST'});
+        refreshUnreadBadges();
+      }
+    });
+
+    composeInput.focus();
+  }
+
+  async function openConversation(userId) {
+    activeConversationUserId = userId;
+    renderConversationList();
+    sidebar.classList.add('dm-sidebar-hidden');
+    chatArea.classList.add('dm-chat-active');
+    chatArea.innerHTML =
+        '<div class="dm-chat-placeholder"><p class="meta">Loading messages...</p></div>';
+
+    try {
+      const payload = await api(`/api/dm/conversations/${userId}`);
+      const conv = conversations.find((c) => c.userId === userId);
+      const otherUser = conv ? conv.user : {id: userId, name: 'User'};
+
+      renderChatView(payload.messages, otherUser);
+
+      // Mark as read
+      if (conv && conv.unreadCount > 0) {
+        conv.unreadCount = 0;
+        renderConversationList();
+        await api(`/api/dm/conversations/${userId}/read`, {method: 'POST'});
+        refreshUnreadBadges();
+      }
+    } catch (error) {
+      chatArea.innerHTML = `<div class="dm-chat-placeholder"><p class="meta">${
+          escapeHtml(error.message)}</p></div>`;
+    }
+  }
+
+  async function loadConversations() {
+    try {
+      const payload = await api('/api/dm/conversations');
+      conversations = payload.conversations;
+      renderConversationList();
+    } catch (error) {
+      conversationList.innerHTML =
+          `<div class="empty-state">${escapeHtml(error.message)}</div>`;
+    }
+  }
+
+  // Click on conversation item
+  conversationList.addEventListener('click', (event) => {
+    const item = event.target.closest('[data-dm-user-id]');
+    if (!item) return;
+    openConversation(item.dataset.dmUserId);
+  });
+
+  // Socket.io real-time incoming messages
+  if (socket) {
+    socket.on('dm:new', (dm) => {
+      const otherUserId =
+          dm.senderId === state.currentUser.id ? dm.receiverId : dm.senderId;
+
+      // Update conversation list
+      const existingConv = conversations.find((c) => c.userId === otherUserId);
+      if (existingConv) {
+        existingConv.lastMessage = dm;
+        if (dm.receiverId === state.currentUser.id &&
+            otherUserId !== activeConversationUserId) {
+          existingConv.unreadCount += 1;
+        }
+        // Move to top
+        conversations =
+            [existingConv, ...conversations.filter((c) => c !== existingConv)];
+      } else {
+        const otherUser =
+            dm.senderId === state.currentUser.id ? dm.receiver : dm.sender;
+        conversations.unshift({
+          userId: otherUserId,
+          user: otherUser,
+          lastMessage: dm,
+          unreadCount: dm.receiverId === state.currentUser.id ? 1 : 0,
+        });
+      }
+      renderConversationList();
+
+      // If this conversation is active, append the message
+      if (otherUserId === activeConversationUserId) {
+        const messagesContainer = chatArea.querySelector('#dm-messages');
+        if (messagesContainer) {
+          // Remove empty state if present
+          const emptyState = messagesContainer.querySelector('.empty-state');
+          if (emptyState) emptyState.remove();
+
+          messagesContainer.insertAdjacentHTML(
+              'beforeend', renderDmMessage(dm, state.currentUser.id));
+          messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+          // Mark as read if received
+          if (dm.receiverId === state.currentUser.id) {
+            const conv = conversations.find((c) => c.userId === otherUserId);
+            if (conv) conv.unreadCount = 0;
+            renderConversationList();
+            api(`/api/dm/conversations/${otherUserId}/read`, {method: 'POST'});
+          }
+        }
+      }
+
+      refreshUnreadBadges();
+    });
+
+    socket.on('dm:read', ({otherUserId}) => {
+      const conv = conversations.find((c) => c.userId === otherUserId);
+      if (conv) {
+        conv.unreadCount = 0;
+        renderConversationList();
+      }
+    });
+  }
+
+  // Initial load
+  await loadConversations();
+
+  // If we have a target user, open or create that conversation
+  if (targetUserId) {
+    const existingConv = conversations.find((c) => c.userId === targetUserId);
+    if (existingConv) {
+      openConversation(targetUserId);
+    } else {
+      // User might not have a conversation yet, try to load their profile
+      try {
+        const profiles = await loadProfiles('', {});
+        const targetUser = (profiles || []).find((p) => p.id === targetUserId);
+        if (targetUser) {
+          conversations.unshift({
+            userId: targetUser.id,
+            user: targetUser,
+            lastMessage: null,
+            unreadCount: 0,
+          });
+          renderConversationList();
+        }
+        openConversation(targetUserId);
+      } catch {
+        openConversation(targetUserId);
+      }
+    }
+  }
+
+  // Poll conversations and active chat every 20 seconds
+  setInterval(async () => {
+    await loadConversations();
+    if (activeConversationUserId) {
+      try {
+        const payload =
+            await api(`/api/dm/conversations/${activeConversationUserId}`);
+        const messagesContainer = chatArea.querySelector('#dm-messages');
+        if (messagesContainer) {
+          const wasAtBottom = messagesContainer.scrollHeight -
+                  messagesContainer.scrollTop - messagesContainer.clientHeight <
+              40;
+          messagesContainer.innerHTML = payload.messages.length ?
+              payload.messages
+                  .map((m) => renderDmMessage(m, state.currentUser.id))
+                  .join('') :
+              '<div class="empty-state">No messages yet. Say hello!</div>';
+          if (wasAtBottom) {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+          }
+        }
+      } catch { /* ignore polling errors */
+      }
+    }
+  }, 20000);
 }
 
 function wireLogout() {
@@ -1508,7 +1910,6 @@ async function loadProfiles(searchQuery = '', options = {}) {
   const payload = await api(
       `/api/profiles${params.toString() ? `?${params.toString()}` : ''}`,
       options);
-  state.profiles = payload.profiles;
   return payload.profiles;
 }
 
@@ -1560,7 +1961,6 @@ async function loadRides(filters = {}, options = {}) {
 
   const payload = await api(
       `/api/rides${params.toString() ? `?${params.toString()}` : ''}`, options);
-  state.rides = payload.rides;
   return payload.rides;
 }
 
@@ -1632,8 +2032,8 @@ function renderDriverRequests(ride) {
                       request
                           .passengerEmail)}</strong> <span class="request-divider">-</span> <span class="meta">${
                   escapeHtml(
-                      request
-                          .passengerEmail)}</span> <span class="request-divider">-</span> <span class="pill status-${
+                      request.passenger?.publicId ||
+                      '')}</span> <span class="request-divider">-</span> <span class="pill status-${
                   request.status}">${escapeHtml(request.status)}</span></span>
                     ${
                   request.status === 'pending' ?
@@ -1686,12 +2086,11 @@ function renderChat(ride) {
               .join('') :
           '<li class="empty-state">No messages yet. Use chat to coordinate pickup details.</li>'}
       </ul>
-      <form class="chat-form" data-chat-ride-id="${ride.id}">
-        <label>
-          New message
-          <textarea name="text" rows="2" placeholder="Share pickup details or arrival timing."></textarea>
-        </label>
-        <button type="submit">Send message</button>
+      <form class="chat-compose" data-chat-ride-id="${ride.id}">
+        <input type="text" name="text" placeholder="Share pickup details or arrival timing." autocomplete="off">
+        <button type="submit" aria-label="Send message">
+          <img src="images/icon_send_message.svg" alt="" width="18" height="18">
+        </button>
       </form>
     </section>
   `;
@@ -1832,15 +2231,6 @@ function ensureAuthenticated() {
   return true;
 }
 
-function ensureManager() {
-  if (!userIsManager()) {
-    redirectTo('index.html');
-    return false;
-  }
-
-  return true;
-}
-
 async function setupLandingPage() {
   syncLandingPageAuthState();
 
@@ -1953,17 +2343,7 @@ async function setupLoginPage() {
 }
 
 async function setupDashboardPage() {
-  const hubGrid = document.querySelector('.hub-grid');
-
-  if (hubGrid && userIsManager()) {
-    hubGrid.insertAdjacentHTML('beforeend', `
-          <a href="debug.html" class="hub-card">
-            <span class="hub-label">06</span>
-            <h2>Debug data</h2>
-            <p>Inspect all users, rides, requests, and ride chat data.</p>
-          </a>
-        `);
-  }
+  // Dashboard page initialization
 }
 
 function ensureLocationMapModal() {
@@ -2485,7 +2865,6 @@ async function setupCreateRidePage() {
       option.addEventListener('click', () => {
         applyOfficeSelection(option.dataset.officeLocation || '');
         closeOfficePicker();
-        endPointInput?.focus();
       });
     });
 
@@ -2692,271 +3071,6 @@ async function setupMyRidesPage() {
   await handleRideActions(passengerContainer, refresh);
 }
 
-function renderDebugSummary(profiles, rides) {
-  const requestCount =
-      rides.reduce((total, ride) => total + ride.requests.length, 0);
-  const messageCount =
-      rides.reduce((total, ride) => total + ride.messages.length, 0);
-
-  return `
-    <div class="debug-summary-grid">
-      <article class="debug-stat-card">
-        <strong>${profiles.length}</strong>
-        <span>Profiles</span>
-      </article>
-      <article class="debug-stat-card">
-        <strong>${rides.length}</strong>
-        <span>Rides</span>
-      </article>
-      <article class="debug-stat-card">
-        <strong>${requestCount}</strong>
-        <span>Seat requests</span>
-      </article>
-      <article class="debug-stat-card">
-        <strong>${messageCount}</strong>
-        <span>Messages</span>
-      </article>
-    </div>
-  `;
-}
-
-function renderDebugUser(profile, rides) {
-  const email = profile.email.toLowerCase();
-  const drivingRides =
-      rides.filter((ride) => ride.driverEmail.toLowerCase() === email);
-  const passengerRides = rides.filter(
-      (ride) => ride.requests.some(
-          (request) => request.passengerEmail.toLowerCase() === email));
-
-  return `
-    <article class="debug-card">
-      <div class="debug-card-header">
-        <div>
-          <h3>${escapeHtml(profile.name || 'Unnamed user')}</h3>
-          <p class="meta">${escapeHtml(profile.email)}</p>
-        </div>
-        <div class="pill-row">
-          <span class="pill">Driving: ${drivingRides.length}</span>
-          <span class="pill">Passenger: ${passengerRides.length}</span>
-        </div>
-      </div>
-
-      <div class="debug-meta-grid">
-        <div>
-          <strong>Phone</strong>
-          <div class="meta">${escapeHtml(profile.phone || '—')}</div>
-        </div>
-        <div>
-          <strong>Default car</strong>
-          <div class="meta">${escapeHtml(profile.defaultCar || '—')}</div>
-        </div>
-        <div>
-          <strong>Default office</strong>
-          <div class="meta">${
-      escapeHtml(formatOfficeLocation(profile.defaultOffice) || '—')}</div>
-        </div>
-        <div>
-          <strong>Default starting location</strong>
-          <div class="meta">${
-      escapeHtml(profile.defaultStartingLocation || '—')}</div>
-        </div>
-        <div>
-          <strong>Created</strong>
-          <div class="meta">${formatDateTime(profile.createdAt)}</div>
-        </div>
-      </div>
-
-      <div class="debug-section-grid">
-        <section class="debug-subsection">
-          <h4>Rides as driver</h4>
-          ${
-      drivingRides.length ?
-          `
-            <ul class="debug-list">
-              ${
-              drivingRides
-                  .map(
-                      (ride) => `
-                  <li>
-                    <strong>${escapeHtml(formatRideRouteLabel(ride))}</strong>
-                    <span class="meta">${
-                          formatDateTimeRange(
-                              ride.startWindowStart,
-                              ride.startWindowEnd,
-                              )} · Seats ${ride.seatsLeft}/${
-                          ride.seatsTotal}</span>
-                  </li>
-                `).join('')}
-            </ul>
-          ` :
-          '<div class="empty-state">No rides created by this user.</div>'}
-        </section>
-
-        <section class="debug-subsection">
-          <h4>Rides as passenger</h4>
-          ${
-      passengerRides.length ?
-          `
-            <ul class="debug-list">
-              ${
-              passengerRides
-                  .map((ride) => {
-                    const request = ride.requests.find(
-                        (item) => item.passengerEmail.toLowerCase() === email);
-
-                    return `
-                  <li>
-                    <strong>${escapeHtml(formatRideRouteLabel(ride))}</strong>
-                    <span class="meta">Driver: ${
-                        escapeHtml(
-                            ride.driver?.name || ride.driverEmail)}</span>
-                    <span class="pill status-${
-                        escapeHtml(request?.status || 'pending')}">${
-                        escapeHtml(request?.status || 'pending')}</span>
-                  </li>
-                `;
-                  })
-                  .join('')}
-            </ul>
-          ` :
-          '<div class="empty-state">No passenger ride activity for this user.</div>'}
-        </section>
-      </div>
-    </article>
-  `;
-}
-
-function renderDebugRide(ride) {
-  return `
-    <article class="debug-card">
-      <div class="debug-card-header">
-        <div>
-          <h3>${escapeHtml(formatRideRouteLabel(ride))}</h3>
-          <p class="meta">Ride ID: ${escapeHtml(ride.id)}</p>
-        </div>
-        <div class="pill-row">
-          <span class="pill">Seats ${ride.seatsLeft}/${ride.seatsTotal}</span>
-          <span class="pill">Requests ${ride.requests.length}</span>
-          <span class="pill">Messages ${ride.messages.length}</span>
-        </div>
-      </div>
-
-      <div class="debug-meta-grid">
-        <div>
-          <strong>Driver</strong>
-          <div class="meta">${
-      escapeHtml(ride.driver?.name || ride.driverEmail)}</div>
-        </div>
-        <div>
-          <strong>Driver email</strong>
-          <div class="meta">${escapeHtml(ride.driverEmail)}</div>
-        </div>
-        <div>
-          <strong>Window</strong>
-          <div class="meta">${
-      formatDateTimeRange(ride.startWindowStart, ride.startWindowEnd)}</div>
-        </div>
-        <div>
-          <strong>Car</strong>
-          <div class="meta">${escapeHtml(ride.car || '—')}</div>
-        </div>
-      </div>
-
-      <section class="debug-subsection">
-        <h4>Notes</h4>
-        <div class="meta">${
-      escapeHtml(ride.notes || 'No notes for this ride.')}</div>
-      </section>
-
-      <div class="debug-section-grid">
-        <section class="debug-subsection">
-          <h4>Seat requests</h4>
-          ${
-      ride.requests.length ?
-          `
-            <ul class="debug-list">
-              ${
-              ride.requests
-                  .map(
-                      (request) => `
-                  <li>
-                    <strong>${
-                          escapeHtml(
-                              request.passenger?.name ||
-                              request.passengerEmail)}</strong>
-                    <span class="meta">${
-                          escapeHtml(request.passengerEmail)} · ${
-                          escapeHtml(request.message || 'No message')}</span>
-                    <span class="pill status-${escapeHtml(request.status)}">${
-                          escapeHtml(request.status)}</span>
-                  </li>
-                `).join('')}
-            </ul>
-          ` :
-          '<div class="empty-state">No seat requests yet.</div>'}
-        </section>
-
-        <section class="debug-subsection">
-          <h4>Messages</h4>
-          ${
-      ride.messages.length ?
-          `
-            <ul class="debug-list">
-              ${
-              ride.messages
-                  .map(
-                      (message) => `
-                  <li>
-                    <strong>${
-                          escapeHtml(
-                              message.sender?.name ||
-                              message.senderEmail)}</strong>
-                    <span class="meta">${
-                          formatDateTime(message.createdAt)}</span>
-                    <span>${escapeHtml(message.text)}</span>
-                  </li>
-                `).join('')}
-            </ul>
-          ` :
-          '<div class="empty-state">No chat messages yet.</div>'}
-        </section>
-      </div>
-    </article>
-  `;
-}
-
-async function setupDebugPage() {
-  const summary = document.querySelector('#debug-summary');
-  const usersContainer = document.querySelector('#debug-users-list');
-  const ridesContainer = document.querySelector('#debug-rides-list');
-  const refreshButton = document.querySelector('#debug-refresh');
-
-  const refresh = async () => {
-    const payload = await api('/api/admin/overview');
-    const {profiles, rides} = payload;
-
-    summary.innerHTML = renderDebugSummary(profiles, rides);
-    usersContainer.innerHTML = profiles.length ?
-        profiles.map((profile) => renderDebugUser(profile, rides)).join('') :
-        '<div class="empty-state">No users found in the database.</div>';
-    ridesContainer.innerHTML = rides.length ?
-        rides.map((ride) => renderDebugRide(ride)).join('') :
-        '<div class="empty-state">No rides found in the database.</div>';
-  };
-
-  await refresh();
-
-  if (refreshButton) {
-    refreshButton.addEventListener('click', async () => {
-      try {
-        await refresh();
-      } catch (error) {
-        setFeedback(error.message, true);
-      }
-    });
-  }
-}
-
 async function setupProfilePage() {
   const form = document.querySelector('#profile-update-form');
   const deleteAccountButton = document.querySelector('#delete-account-button');
@@ -3009,375 +3123,11 @@ async function setupProfilePage() {
   });
 }
 
-// --- Direct Messaging ---
-
-async function fetchUnreadCount() {
-  try {
-    const payload = await api('/api/dm/unread-count');
-    return payload.count;
-  } catch {
-    return 0;
-  }
-}
-
-function updateUnreadBadges(count) {
-  document.querySelectorAll('.nav-unread-badge').forEach((badge) => {
-    if (count > 0) {
-      badge.hidden = false;
-      badge.textContent = count > 99 ? '99+' : String(count);
-    } else {
-      badge.hidden = true;
-      badge.textContent = '';
-    }
-  });
-}
-
-async function refreshUnreadBadges() {
-  if (!state.currentUser) return;
-  const count = await fetchUnreadCount();
-  updateUnreadBadges(count);
-}
-
-function formatDmTime(isoString) {
-  const date = new Date(isoString);
-  const now = new Date();
-  const isToday = date.toDateString() === now.toDateString();
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const isYesterday = date.toDateString() === yesterday.toDateString();
-
-  if (isToday) {
-    return date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
-  }
-  if (isYesterday) {
-    return 'Yesterday';
-  }
-  return date.toLocaleDateString([], {month: 'short', day: 'numeric'});
-}
-
-function renderConversationItem(conversation, activeUserId) {
-  const user = conversation.user;
-  const lastMsg = conversation.lastMessage;
-  const isActive = user.id === activeUserId;
-  const unreadClass =
-      conversation.unreadCount > 0 ? ' dm-conversation-item-unread' : '';
-  const activeClass = isActive ? ' dm-conversation-item-active' : '';
-  const preview = lastMsg ? escapeHtml(lastMsg.text).slice(0, 60) : '';
-  const time = lastMsg ? formatDmTime(lastMsg.createdAt) : '';
-
-  return `
-    <button type="button" class="dm-conversation-item${unreadClass}${
-      activeClass}" data-dm-user-id="${escapeHtml(user.id)}">
-      <img src="images/icon_default_user.svg" alt="" class="dm-avatar" />
-      <div class="dm-conversation-item-body">
-        <div class="dm-conversation-item-header">
-          <strong class="dm-conversation-item-name">${
-      escapeHtml(user.name || 'Unnamed user')}</strong>
-          <span class="dm-conversation-item-time">${time}</span>
-        </div>
-        <div class="dm-conversation-item-preview">${preview}</div>
-      </div>
-      ${
-      conversation.unreadCount > 0 ?
-          `<span class="dm-conversation-item-badge">${
-              conversation.unreadCount > 99 ?
-                  '99+' :
-                  conversation.unreadCount}</span>` :
-          ''}
-    </button>
-  `;
-}
-
-function renderDmMessage(dm, currentUserId) {
-  const isMine = dm.senderId === currentUserId;
-  const sideClass = isMine ? 'dm-bubble-mine' : 'dm-bubble-theirs';
-
-  return `
-    <div class="dm-bubble ${sideClass}">
-      <div class="dm-bubble-text">${escapeHtml(dm.text)}</div>
-      <div class="dm-bubble-time">${formatDmTime(dm.createdAt)}</div>
-    </div>
-  `;
-}
-
-async function setupMessagesPage() {
-  const sidebar = document.querySelector('#dm-sidebar');
-  const conversationList = document.querySelector('#dm-conversation-list');
-  const chatArea = document.querySelector('#dm-chat');
-  let activeConversationUserId = null;
-  let conversations = [];
-
-  // Check URL for ?user=... to open a specific conversation
-  const urlParams = new URLSearchParams(window.location.search);
-  const targetUserId = urlParams.get('user');
-
-  // Connect socket for real-time
-  const socket = typeof io !== 'undefined' ? io() : null;
-
-  function renderConversationList() {
-    if (!conversations.length) {
-      conversationList.innerHTML =
-          '<div class="empty-state">No conversations yet.</div>';
-      return;
-    }
-    conversationList.innerHTML =
-        conversations
-            .map((c) => renderConversationItem(c, activeConversationUserId))
-            .join('');
-  }
-
-  function renderChatView(messages, otherUser) {
-    const messagesHtml = messages.length ?
-        messages.map((m) => renderDmMessage(m, state.currentUser.id)).join('') :
-        '<div class="empty-state">No messages yet. Say hello!</div>';
-
-    chatArea.innerHTML = `
-      <div class="dm-chat-header">
-        <button type="button" class="dm-back-button" id="dm-back-button" aria-label="Back to conversations">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
-        </button>
-        <div class="dm-chat-header-info">
-          <img src="images/icon_default_user.svg" alt="" class="dm-avatar" />
-          <strong>${escapeHtml(otherUser.name || 'Unnamed user')}</strong>
-          <span class="meta">${escapeHtml(otherUser.publicId || '')}</span>
-        </div>
-      </div>
-      <div class="dm-messages" id="dm-messages">${messagesHtml}</div>
-      <form class="dm-compose" id="dm-compose">
-        <input type="text" name="text" placeholder="Type a message..." autocomplete="off" />
-        <button type="submit" aria-label="Send message">
-          <img src="images/icon_send_message.svg" alt="" width="22" height="22" style="margin-left: 3px" />
-        </button>
-      </form>
-    `;
-
-    const messagesContainer = chatArea.querySelector('#dm-messages');
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
-
-    // Wire back button
-    chatArea.querySelector('#dm-back-button').addEventListener('click', () => {
-      activeConversationUserId = null;
-      sidebar.classList.remove('dm-sidebar-hidden');
-      chatArea.classList.remove('dm-chat-active');
-      renderConversationList();
-      // Clean URL
-      const cleanUrl = window.location.pathname;
-      window.history.replaceState({}, '', cleanUrl);
-    });
-
-    // Wire compose form
-    const composeForm = chatArea.querySelector('#dm-compose');
-    const composeInput = composeForm.querySelector('input[name="text"]');
-
-    composeForm.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const text = composeInput.value.trim();
-      if (!text) return;
-
-      composeInput.value = '';
-
-      try {
-        await api(`/api/dm/conversations/${activeConversationUserId}`, {
-          method: 'POST',
-          body: JSON.stringify({text}),
-        });
-      } catch (error) {
-        showToast(error.message, 'error');
-        composeInput.value = text;
-      }
-    });
-
-    composeInput.addEventListener('focus', async () => {
-      const conv =
-          conversations.find((c) => c.userId === activeConversationUserId);
-      if (conv && conv.unreadCount > 0) {
-        conv.unreadCount = 0;
-        renderConversationList();
-        await api(
-            `/api/dm/conversations/${activeConversationUserId}/read`,
-            {method: 'POST'});
-        refreshUnreadBadges();
-      }
-    });
-
-    composeInput.focus();
-  }
-
-  async function openConversation(userId) {
-    activeConversationUserId = userId;
-    renderConversationList();
-    sidebar.classList.add('dm-sidebar-hidden');
-    chatArea.classList.add('dm-chat-active');
-    chatArea.innerHTML =
-        '<div class="dm-chat-placeholder"><p class="meta">Loading messages...</p></div>';
-
-    try {
-      const payload = await api(`/api/dm/conversations/${userId}`);
-      const conv = conversations.find((c) => c.userId === userId);
-      const otherUser = conv ? conv.user : {id: userId, name: 'User'};
-
-      renderChatView(payload.messages, otherUser);
-
-      // Mark as read
-      if (conv && conv.unreadCount > 0) {
-        conv.unreadCount = 0;
-        renderConversationList();
-        await api(`/api/dm/conversations/${userId}/read`, {method: 'POST'});
-        refreshUnreadBadges();
-      }
-    } catch (error) {
-      chatArea.innerHTML = `<div class="dm-chat-placeholder"><p class="meta">${
-          escapeHtml(error.message)}</p></div>`;
-    }
-  }
-
-  async function loadConversations() {
-    try {
-      const payload = await api('/api/dm/conversations');
-      conversations = payload.conversations;
-      renderConversationList();
-    } catch (error) {
-      conversationList.innerHTML =
-          `<div class="empty-state">${escapeHtml(error.message)}</div>`;
-    }
-  }
-
-  // Click on conversation item
-  conversationList.addEventListener('click', (event) => {
-    const item = event.target.closest('[data-dm-user-id]');
-    if (!item) return;
-    openConversation(item.dataset.dmUserId);
-  });
-
-  // Socket.io real-time incoming messages
-  if (socket) {
-    socket.on('dm:new', (dm) => {
-      const otherUserId =
-          dm.senderId === state.currentUser.id ? dm.receiverId : dm.senderId;
-
-      // Update conversation list
-      const existingConv = conversations.find((c) => c.userId === otherUserId);
-      if (existingConv) {
-        existingConv.lastMessage = dm;
-        if (dm.receiverId === state.currentUser.id &&
-            otherUserId !== activeConversationUserId) {
-          existingConv.unreadCount += 1;
-        }
-        // Move to top
-        conversations =
-            [existingConv, ...conversations.filter((c) => c !== existingConv)];
-      } else {
-        const otherUser =
-            dm.senderId === state.currentUser.id ? dm.receiver : dm.sender;
-        conversations.unshift({
-          userId: otherUserId,
-          user: otherUser,
-          lastMessage: dm,
-          unreadCount: dm.receiverId === state.currentUser.id ? 1 : 0,
-        });
-      }
-      renderConversationList();
-
-      // If this conversation is active, append the message
-      if (otherUserId === activeConversationUserId) {
-        const messagesContainer = chatArea.querySelector('#dm-messages');
-        if (messagesContainer) {
-          // Remove empty state if present
-          const emptyState = messagesContainer.querySelector('.empty-state');
-          if (emptyState) emptyState.remove();
-
-          messagesContainer.insertAdjacentHTML(
-              'beforeend', renderDmMessage(dm, state.currentUser.id));
-          messagesContainer.scrollTop = messagesContainer.scrollHeight;
-
-          // Mark as read if received
-          if (dm.receiverId === state.currentUser.id) {
-            const conv = conversations.find((c) => c.userId === otherUserId);
-            if (conv) conv.unreadCount = 0;
-            renderConversationList();
-            api(`/api/dm/conversations/${otherUserId}/read`, {method: 'POST'});
-          }
-        }
-      }
-
-      refreshUnreadBadges();
-    });
-
-    socket.on('dm:read', ({otherUserId}) => {
-      const conv = conversations.find((c) => c.userId === otherUserId);
-      if (conv) {
-        conv.unreadCount = 0;
-        renderConversationList();
-      }
-    });
-  }
-
-  // Initial load
-  await loadConversations();
-
-  // If we have a target user, open or create that conversation
-  if (targetUserId) {
-    const existingConv = conversations.find((c) => c.userId === targetUserId);
-    if (existingConv) {
-      openConversation(targetUserId);
-    } else {
-      // User might not have a conversation yet, try to load their profile
-      try {
-        const profiles = await loadProfiles('', {});
-        const targetUser =
-            (state.profiles || []).find((p) => p.id === targetUserId);
-        if (targetUser) {
-          conversations.unshift({
-            userId: targetUser.id,
-            user: targetUser,
-            lastMessage: null,
-            unreadCount: 0,
-          });
-          renderConversationList();
-        }
-        openConversation(targetUserId);
-      } catch {
-        openConversation(targetUserId);
-      }
-    }
-  }
-
-  // Poll conversations and active chat every 20 seconds
-  setInterval(async () => {
-    await loadConversations();
-    if (activeConversationUserId) {
-      try {
-        const payload =
-            await api(`/api/dm/conversations/${activeConversationUserId}`);
-        const messagesContainer = chatArea.querySelector('#dm-messages');
-        if (messagesContainer) {
-          const wasAtBottom = messagesContainer.scrollHeight -
-                  messagesContainer.scrollTop - messagesContainer.clientHeight <
-              40;
-          messagesContainer.innerHTML = payload.messages.length ?
-              payload.messages
-                  .map((m) => renderDmMessage(m, state.currentUser.id))
-                  .join('') :
-              '<div class="empty-state">No messages yet. Say hello!</div>';
-          if (wasAtBottom) {
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-          }
-        }
-      } catch { /* ignore polling errors */
-      }
-    }
-  }, 20000);
-}
-
 async function init() {
   await loadCurrentUser();
   setupMobileMenus();
 
   if (protectedPages.has(page) && !ensureAuthenticated()) {
-    return;
-  }
-
-  if (page === 'debug' && !ensureManager()) {
     return;
   }
 
@@ -3411,9 +3161,6 @@ async function init() {
       break;
     case 'messages':
       await setupMessagesPage();
-      break;
-    case 'debug':
-      await setupDebugPage();
       break;
     case 'profile':
       await setupProfilePage();
