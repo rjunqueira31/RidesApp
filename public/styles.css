@@ -67,6 +67,8 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   font-family: 'Inter', sans-serif;
   color: var(--text);
   background:
@@ -179,6 +181,10 @@ button:disabled {
   width: min(1200px, calc(100% - 2rem));
   margin: 0 auto;
   padding: 1.5rem 0 3rem;
+}
+
+body > .shell {
+  flex: 1;
 }
 
 .landing-body .landing-shell {
@@ -1956,15 +1962,9 @@ textarea::placeholder {
 
 /* --- Direct Messaging --- */
 
-body[data-page="messages"] {
-  overflow: hidden;
-  height: 100dvh;
-}
-
-body[data-page="messages"] .shell {
+body[data-page="messages"] > .shell {
   display: flex;
   flex-direction: column;
-  height: 100dvh;
   padding-bottom: 1rem;
 }
 
@@ -2016,8 +2016,7 @@ body[data-page="messages"] .shell {
 .dm-layout {
   display: grid;
   grid-template-columns: 340px minmax(0, 1fr);
-  flex: 1;
-  min-height: 0;
+  height: 85dvh;
   background: var(--white);
   border: 1px solid var(--border);
   border-radius: var(--radius);
