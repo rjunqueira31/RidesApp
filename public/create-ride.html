@@ -47,7 +47,7 @@
 
     <main class="page-grid single-column">
       <section class="panel-card">
-        <span class="eyebrow">Driver action</span>
+        <span class="eyebrow">Driver</span>
         <h1>Create a ride</h1>
         <p class="section-copy">Publish a ride for colleagues to find and request.</p>
         <div id="page-feedback" class="feedback" aria-live="polite"></div>
@@ -109,18 +109,26 @@
             </label>
           </div>
           <div class="schedule-fields full-width">
-            <label>
-              Ride date <span class="label-required" aria-hidden="true">*</span>
-              <input type="date" name="rideDate" required />
-            </label>
-            <div class="schedule-time-fields">
+            <div class="schedule-date-row">
               <label>
-                Earliest departure <span class="label-required" aria-hidden="true">*</span>
+                Ride date <span class="label-required" aria-hidden="true">*</span>
+                <input type="date" name="rideDate" required />
+              </label>
+              <div class="time-mode-toggle" id="toggle-time-window">
+                <button type="button" class="time-mode-option time-mode-option-active" data-time-mode="exact">Exact
+                  time</button>
+                <button type="button" class="time-mode-option" data-time-mode="window">Time window</button>
+              </div>
+            </div>
+            <div class="schedule-time-inputs">
+              <label>
+                <span id="start-time-label-text">Departure time</span> <span class="label-required"
+                  aria-hidden="true">*</span>
                 <input type="time" name="startTime" required step="60" lang="en-GB" />
               </label>
-              <label>
+              <label id="end-time-label" hidden>
                 Latest departure <span class="label-required" aria-hidden="true">*</span>
-                <input type="time" name="endTime" required step="60" lang="en-GB" />
+                <input type="time" name="endTime" step="60" lang="en-GB" />
               </label>
             </div>
           </div>

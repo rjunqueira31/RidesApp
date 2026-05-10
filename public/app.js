@@ -294,9 +294,17 @@ function isSameCalendarDay(leftValue, rightValue) {
   return getCalendarDayKey(leftValue) === getCalendarDayKey(rightValue);
 }
 
+function isExactDeparture(startValue, endValue) {
+  return startValue && endValue && startValue === endValue;
+}
+
 function formatDateTimeRange(startValue, endValue) {
   if (!startValue || !endValue) {
     return startValue ? formatDateTime(startValue) : '—';
+  }
+
+  if (isExactDeparture(startValue, endValue)) {
+    return `${formatCalendarDate(startValue)}, ${formatClockTime(startValue)}`;
   }
 
   if (isSameCalendarDay(startValue, endValue)) {
@@ -383,26 +391,27 @@ function validateRideDateTime(dateValue, startTime, endTime) {
   const start = new Date(combineDateAndTime(dateValue, startTime));
   const end = new Date(combineDateAndTime(dateValue, endTime));
   const now = floorToMinute(new Date());
+  const isSingleDeparture = startTime === endTime;
 
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-    throw new Error('Please choose a valid departure window.');
+    throw new Error('Please choose a valid departure time.');
   }
 
-  if (shouldTreatEndTimeAsNextDay(startTime, endTime)) {
+  if (!isSingleDeparture && shouldTreatEndTimeAsNextDay(startTime, endTime)) {
     end.setDate(end.getDate() + 1);
   }
 
   if (start.getTime() < now.getTime()) {
-    throw new Error('Earliest departure must be in the future.');
+    throw new Error('Departure time must be in the future.');
   }
 
-  if (end.getTime() <= start.getTime()) {
+  if (!isSingleDeparture && end.getTime() <= start.getTime()) {
     throw new Error('Latest departure must be later than earliest departure.');
   }
 
   return {
     startWindowStart: start.toISOString(),
-    startWindowEnd: end.toISOString(),
+    startWindowEnd: isSingleDeparture ? start.toISOString() : end.toISOString(),
   };
 }
 
@@ -419,7 +428,7 @@ function syncRideTimeConstraints(dateInput, startTimeInput, endTimeInput) {
     }
   }
 
-  if (!endTimeInput.value) {
+  if (!endTimeInput.closest('[hidden]') && !endTimeInput.value) {
     endTimeInput.value = addMinutesToTime(startTimeInput.value, 60);
   }
 }
@@ -872,7 +881,7 @@ function renderRideDetailsContent(ride) {
     <div class="ride-details-summary">
       <div class="card-grid ride-details-grid">
         <div class="ride-details-grid-window">
-          <strong>Window</strong>
+          <strong>${isExactDeparture(ride.startWindowStart, ride.startWindowEnd) ? 'Departure' : 'Window'}</strong>
           <div class="meta">${
       escapeHtml(formatDateTimeRange(
           ride.startWindowStart, ride.startWindowEnd))}</div>
@@ -2110,7 +2119,7 @@ function renderRideCard(ride, options = {}) {
 
       <div class="card-grid">
         <div class="ride-window-field">
-          <strong>Window</strong>
+          <strong>${isExactDeparture(ride.startWindowStart, ride.startWindowEnd) ? 'Departure' : 'Window'}</strong>
           <div class="meta ride-window-meta">${
       formatDateTimeRange(ride.startWindowStart, ride.startWindowEnd)}</div>
         </div>
@@ -2787,14 +2796,43 @@ async function setupCreateRidePage() {
   const dateInput = form.querySelector('input[name="rideDate"]');
   const startTimeInput = form.querySelector('input[name="startTime"]');
   const endTimeInput = form.querySelector('input[name="endTime"]');
+  const endTimeLabel = document.querySelector('#end-time-label');
+  const startTimeLabelText = document.querySelector('#start-time-label-text');
+  const timeWindowToggle = document.querySelector('#toggle-time-window');
+  const timeWindowOptions = timeWindowToggle.querySelectorAll('.time-mode-option');
   const swapRouteButton = document.querySelector('#swap-route-button');
+  let useTimeWindow = false;
   const today = new Date();
   const nextMinute = roundUpToNextMinute(today);
 
   dateInput.min = formatDateForInput(today);
   dateInput.value = formatDateForInput(today);
   startTimeInput.value = formatTimeForInput(nextMinute);
-  endTimeInput.value = addMinutesToTime(startTimeInput.value, 60);
+
+  timeWindowOptions.forEach((option) => {
+    option.addEventListener('click', () => {
+      const mode = option.dataset.timeMode;
+      useTimeWindow = mode === 'window';
+
+      timeWindowOptions.forEach((opt) =>
+        opt.classList.toggle('time-mode-option-active',
+            opt.dataset.timeMode === mode));
+
+      endTimeLabel.hidden = !useTimeWindow;
+      startTimeLabelText.textContent =
+          useTimeWindow ? 'Earliest departure' : 'Departure time';
+
+      if (useTimeWindow) {
+        endTimeInput.required = true;
+        if (!endTimeInput.value) {
+          endTimeInput.value = addMinutesToTime(startTimeInput.value, 60);
+        }
+      } else {
+        endTimeInput.required = false;
+        endTimeInput.value = '';
+      }
+    });
+  });
 
   if (!carInput.value) {
     carInput.value = state.currentUser.defaultCar || '';
@@ -2917,10 +2955,11 @@ async function setupCreateRidePage() {
     event.preventDefault();
     const formData = new FormData(form);
     const ride = Object.fromEntries(formData.entries());
+    const effectiveEndTime = useTimeWindow ? ride.endTime : ride.startTime;
 
     try {
       const {startWindowStart, startWindowEnd} =
-          validateRideDateTime(ride.rideDate, ride.startTime, ride.endTime);
+          validateRideDateTime(ride.rideDate, ride.startTime, effectiveEndTime);
 
       ride.startWindowStart = startWindowStart;
       ride.startWindowEnd = startWindowEnd;

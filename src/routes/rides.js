@@ -53,7 +53,9 @@ function validateRideWindow(startWindowStart, startWindowEnd) {
     throw error;
   }
 
-  if (end.getTime() <= start.getTime()) {
+  const isSingleDeparture = start.getTime() === end.getTime();
+
+  if (!isSingleDeparture && end.getTime() <= start.getTime()) {
     const error =
         new Error('Latest departure must be later than earliest departure.');
     error.status = 400;
@@ -251,4 +253,7 @@ router.post('/:rideId/messages', async (request, response, next) => {
   }
 });
 
-module.exports = {rideRoutes: router, requestRoutes: requestsRouter};
+module.exports = {
+  rideRoutes : router,
+  requestRoutes : requestsRouter
+};
