@@ -3,8 +3,10 @@ const express = require('express');
 const logger = require('../logger');
 const {requestLogContext} = require('../middleware/requestLogging');
 const {
+  addFavoriteLocation,
   deleteProfileAccount,
   getProfiles,
+  removeFavoriteLocation,
   updateProfile,
 } = require('../store');
 
@@ -39,7 +41,6 @@ router.patch('/:email', async (request, response, next) => {
       email,
       phone,
       defaultCar,
-      defaultOffice,
       defaultStartingLocation,
     } = request.body;
 
@@ -52,7 +53,6 @@ router.patch('/:email', async (request, response, next) => {
       email,
       phone,
       defaultCar,
-      defaultOffice,
       defaultStartingLocation,
     });
 
@@ -89,6 +89,44 @@ router.delete('/', async (request, response, next) => {
       response.clearCookie('connect.sid');
       response.json({ok: true});
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/locations', async (request, response, next) => {
+  try {
+    const {label, address} = request.body;
+
+    if (!String(address || '').trim()) {
+      const error = new Error('Address is required.');
+      error.status = 400;
+      throw error;
+    }
+
+    const location = await addFavoriteLocation(
+        request.currentUser.id, {label, address});
+
+    logger.info('profile.location.added', {
+      ...requestLogContext(request),
+      locationId: location.id,
+    });
+    response.status(201).json({location});
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete('/locations/:locationId', async (request, response, next) => {
+  try {
+    await removeFavoriteLocation(
+        request.currentUser.id, request.params.locationId);
+
+    logger.info('profile.location.removed', {
+      ...requestLogContext(request),
+      locationId: request.params.locationId,
+    });
+    response.json({ok: true});
   } catch (error) {
     next(error);
   }

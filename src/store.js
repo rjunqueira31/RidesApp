@@ -1,13 +1,11 @@
 const {randomInt} = require('crypto');
-const {OfficeLocation, Prisma, SeatRequestStatus, UserRole} =
+const {Prisma, SeatRequestStatus, UserRole} =
     require('@prisma/client');
 
 const prisma = require('./db');
 
 const EXPIRED_RIDE_RETENTION_MS = 2 * 60 * 60 * 1000;
 const PUBLIC_ID_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789';
-
-const OFFICE_LOCATION_VALUES = new Set(Object.values(OfficeLocation));
 
 function normalizeText(value) {
   return String(value || '').trim();
@@ -19,11 +17,6 @@ function toIsoString(value) {
 
 function toStatusValue(value) {
   return String(value || '').trim().toUpperCase();
-}
-
-function normalizeOfficeLocation(value) {
-  const normalizedValue = normalizeText(value).toUpperCase();
-  return OFFICE_LOCATION_VALUES.has(normalizedValue) ? normalizedValue : null;
 }
 
 function getManagerEmailSet() {
@@ -55,8 +48,12 @@ function toPublicProfile(profile) {
     email: profile.email,
     phone: profile.phone,
     defaultCar: profile.defaultCar || '',
-    defaultOffice: profile.defaultOffice || '',
     defaultStartingLocation: profile.defaultStartingLocation || '',
+    favoriteLocations: (profile.favoriteLocations || []).map((loc) => ({
+      id: loc.id,
+      label: loc.label || '',
+      address: loc.address,
+    })),
     role: profile.role,
     createdAt: toIsoString(profile.createdAt),
     updatedAt: toIsoString(profile.updatedAt),
@@ -161,6 +158,7 @@ async function getUserByEmail(email) {
     where: {
       email: normalizedEmail,
     },
+    include: {favoriteLocations: true},
   });
 }
 
@@ -174,6 +172,7 @@ async function getUserById(userId) {
     where: {
       id: normalizedUserId,
     },
+    include: {favoriteLocations: true},
   });
 }
 
@@ -214,6 +213,7 @@ async function getProfiles(searchQuery) {
 
   const profiles = await prisma.user.findMany({
     where,
+    include: {favoriteLocations: true},
     orderBy: {
       name: 'asc',
     },
@@ -255,12 +255,12 @@ async function createProfile(profileInput) {
           passwordHash: normalizeText(profileInput.passwordHash),
           phone: normalizeText(profileInput.phone),
           defaultCar: normalizeText(profileInput.defaultCar) || null,
-          defaultOffice: normalizeOfficeLocation(profileInput.defaultOffice),
           defaultStartingLocation:
               normalizeText(profileInput.defaultStartingLocation) || null,
           role: getManagerEmailSet().has(email) ? UserRole.MANAGER_USER :
                                                   UserRole.DEFAULT_USER,
         },
+        include: {favoriteLocations: true},
       });
 
       return toPublicProfile(profile);
@@ -302,12 +302,12 @@ async function updateProfile(currentEmail, profileInput) {
       email: nextEmail,
       phone: normalizeText(profileInput.phone),
       defaultCar: normalizeText(profileInput.defaultCar) || null,
-      defaultOffice: normalizeOfficeLocation(profileInput.defaultOffice),
       defaultStartingLocation:
           normalizeText(profileInput.defaultStartingLocation) || null,
       role: getManagerEmailSet().has(nextEmail) ? UserRole.MANAGER_USER :
                                                   UserRole.DEFAULT_USER,
     },
+    include: {favoriteLocations: true},
   });
 
   return toPublicProfile(updatedProfile);
@@ -863,7 +863,48 @@ async function markConversationRead(userId, otherUserId) {
   });
 }
 
+async function addFavoriteLocation(userId, {label, address}) {
+  const normalizedAddress = normalizeText(address);
+  if (!normalizedAddress) {
+    throw new Error('Address is required.');
+  }
+
+  const location = await prisma.favoriteLocation.create({
+    data: {
+      userId,
+      label: normalizeText(label) || null,
+      address: normalizedAddress,
+    },
+  });
+
+  return {
+    id: location.id,
+    label: location.label || '',
+    address: location.address,
+  };
+}
+
+async function removeFavoriteLocation(userId, locationId) {
+  const location = await prisma.favoriteLocation.findFirst({
+    where: {
+      id: normalizeText(locationId),
+      userId,
+    },
+  });
+
+  if (!location) {
+    throw new Error('Location not found.');
+  }
+
+  await prisma.favoriteLocation.delete({
+    where: {
+      id: location.id,
+    },
+  });
+}
+
 module.exports = {
+  addFavoriteLocation,
   cancelSeatRequest,
   createMessage,
   createProfile,
@@ -875,6 +916,7 @@ module.exports = {
   getProfiles,
   getRideById,
   listRides,
+  removeFavoriteLocation,
   updateProfile,
   updateSeatRequest,
   createDirectMessage,

@@ -282,7 +282,6 @@ body > .shell {
 .marketing-actions,
 .topbar-user,
 .hero-actions,
-.browser-bar,
 .toolbar,
 .actions,
 .pill-row {
@@ -451,6 +450,7 @@ body > .shell {
   width: 100%;
   justify-self: stretch;
   justify-items: end;
+  text-align: right;
   max-width: none;
 }
 
@@ -473,11 +473,30 @@ body > .shell {
   text-align: right;
 }
 
+.journey-showcase-title {
+  margin: 0;
+  font-size: clamp(2.2rem, 6vw, 4.2rem);
+  line-height: 0.96;
+  letter-spacing: -0.06em;
+}
+
 .journey-showcase-copy p {
   margin: 0;
   color: var(--muted);
   line-height: 1.7;
-  text-align: right;
+}
+
+.journey-showcase-reverse {
+  direction: rtl;
+}
+
+.journey-showcase-reverse > * {
+  direction: ltr;
+}
+
+.journey-showcase-reverse .journey-showcase-copy {
+  justify-items: start;
+  text-align: left;
 }
 
 .main-slogan {
@@ -565,19 +584,6 @@ body > .shell {
   overflow: hidden;
 }
 
-.browser-bar {
-  padding: 1rem 1.2rem;
-  background: var(--bg-page);
-  border-bottom: 1px solid var(--border);
-}
-
-.browser-bar span {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--accent-dark-12);
-}
-
 .hero-visual-content {
   padding: 1.5rem;
 }
@@ -637,7 +643,9 @@ body > .shell {
 .center-layout {
   min-height: calc(100vh - 160px);
   display: grid;
-  place-items: center;
+  justify-items: center;
+  align-items: start;
+  padding-top: 3rem;
 }
 
 .form-card,
@@ -836,6 +844,7 @@ textarea::placeholder {
   color: var(--text);
   font-weight: 600;
   line-height: 1.45;
+  text-align: center;
   opacity: 0;
   transform: translateY(-10px);
   transition: opacity 0.28s ease, transform 0.28s ease;
@@ -1187,11 +1196,13 @@ textarea::placeholder {
   color: var(--white);
 }
 
-.route-fields > label:first-of-type {
+.route-fields > .route-point-field:first-child {
   max-width: calc(100% - 2rem);
 }
 
-.endpoint-label {
+.route-point-field {
+  display: grid;
+  gap: 0.45rem;
   position: relative;
   overflow: visible;
 }
@@ -1221,7 +1232,7 @@ textarea::placeholder {
   color: var(--accent);
 }
 
-.office-picker-panel {
+.location-picker-panel {
   display: grid;
   gap: 0.45rem;
   position: absolute;
@@ -1238,7 +1249,7 @@ textarea::placeholder {
   box-shadow: var(--dropdown-shadow);
 }
 
-.office-picker-header {
+.location-picker-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1246,11 +1257,11 @@ textarea::placeholder {
   padding: 0.45rem 0.5rem 0.25rem;
 }
 
-.office-picker-header strong {
+.location-picker-header strong {
   font-size: 0.95rem;
 }
 
-.office-picker-close {
+.location-picker-close {
   width: 38px;
   min-width: 38px;
   min-height: 38px;
@@ -1263,14 +1274,14 @@ textarea::placeholder {
   line-height: 1;
 }
 
-.office-picker-close:hover {
+.location-picker-close:hover {
   transform: none;
   box-shadow: none;
   background: var(--accent-dark-8);
   color: var(--text);
 }
 
-.office-picker-option {
+.location-picker-option {
   display: grid;
   align-items: start;
   justify-content: stretch;
@@ -1285,28 +1296,136 @@ textarea::placeholder {
   box-shadow: none;
 }
 
-.office-picker-option > span {
+.location-picker-option > span {
   display: block;
   width: 100%;
 }
 
-.office-picker-option:hover {
+.location-picker-option:hover {
   transform: none;
   box-shadow: none;
   background: var(--surface-soft);
 }
 
-.office-picker-option-title {
+.location-picker-option-title {
   font-weight: 700;
 }
 
-.office-picker-option-meta {
+.location-picker-option-meta {
   color: var(--muted);
   font-weight: 500;
 }
 
-.office-picker-option-active {
-  background: var(--accent-soft);
+.location-picker-empty {
+  padding: 0.8rem 0.9rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.location-picker-empty a {
+  color: var(--accent-dark);
+  font-weight: 600;
+}
+
+.profile-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 0;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.profile-tab {
+  all: unset;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.profile-tab:hover {
+  color: var(--text);
+}
+
+.profile-tab-active {
+  color: var(--accent-dark);
+  border-bottom-color: var(--accent-dark);
+}
+
+.profile-tab-panel {
+  animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.favorite-locations-section {
+  margin-top: 0;
+}
+
+.favorite-locations-section h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.favorite-locations-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.favorite-location-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.favorite-location-info {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.favorite-location-label {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.favorite-location-meta {
+  color: var(--muted);
+  font-size: 0.88rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.favorite-location-remove {
+  flex-shrink: 0;
+  width: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0;
+  border-radius: 10px;
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.favorite-location-add-form {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
 }
 
 .route-swap-button {
@@ -2402,8 +2521,8 @@ body[data-page="messages"] > .shell {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .route-fields > label:first-of-type,
-  .route-fields > label:last-of-type {
+  .route-fields > .route-point-field:first-child,
+  .route-fields > .route-point-field:last-child {
     max-width: none;
     padding-left: 0;
   }
@@ -2412,7 +2531,7 @@ body[data-page="messages"] > .shell {
     align-items: flex-start;
   }
 
-  .office-picker-panel {
+  .location-picker-panel {
     left: 0;
     right: 0;
   }
@@ -2474,6 +2593,12 @@ body[data-page="messages"] > .shell {
 
   .journey-showcase {
     padding: 1.1rem;
+  }
+
+  .journey-showcase-copy {
+    order: -1;
+    justify-items: start;
+    text-align: left;
   }
 
 }
@@ -2727,6 +2852,16 @@ body[data-page="messages"] > .shell {
 @media (max-width: 420px) {
   .schedule-time-inputs > label {
     flex: 1 1 100%;
+  }
+
+  .favorite-locations-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.35rem;
+  }
+
+  .favorite-locations-header > button {
+    width: 100%;
   }
 }
 

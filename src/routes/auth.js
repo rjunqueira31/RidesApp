@@ -47,7 +47,6 @@ router.post('/signup', authRateLimit, async (request, response, next) => {
       password,
       phone,
       defaultCar,
-      defaultOffice,
       defaultStartingLocation,
     } = request.body;
 
@@ -64,7 +63,6 @@ router.post('/signup', authRateLimit, async (request, response, next) => {
       passwordHash,
       phone,
       defaultCar,
-      defaultOffice,
       defaultStartingLocation,
     });
 

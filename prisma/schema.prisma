@@ -18,12 +18,6 @@ enum SeatRequestStatus {
   DECLINED
 }
 
-enum OfficeLocation {
-  LISBON
-  PORTO
-  BRAGA
-}
-
 model User {
   id           String    @id @default(cuid())
   publicId     String?   @unique
@@ -32,17 +26,29 @@ model User {
   passwordHash String
   phone        String
   defaultCar   String?
-  defaultOffice OfficeLocation?
   defaultStartingLocation String?
   role         UserRole  @default(DEFAULT_USER)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  ridesDriven  Ride[]    @relation("RideDriver")
-  seatRequests SeatRequest[]
-  messages     Message[]
+  ridesDriven        Ride[]              @relation("RideDriver")
+  seatRequests       SeatRequest[]
+  messages           Message[]
   directMessagesSent     DirectMessage[] @relation("DirectMessagesSent")
   directMessagesReceived DirectMessage[] @relation("DirectMessagesReceived")
+  favoriteLocations  FavoriteLocation[]
+}
+
+model FavoriteLocation {
+  id        String   @id @default(cuid())
+  userId    String
+  label     String?
+  address   String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model Ride {

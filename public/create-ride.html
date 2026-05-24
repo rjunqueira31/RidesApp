@@ -54,8 +54,23 @@
 
         <form id="ride-form" class="stack-form two-column-form">
           <div class="route-fields full-width">
-            <label>
-              Start point <span class="label-required" aria-hidden="true">*</span>
+            <div class="route-point-field">
+              <span class="field-label-row">
+                <span>Start point <span class="label-required" aria-hidden="true">*</span></span>
+                <button type="button" class="field-inline-action location-picker-trigger" aria-expanded="false"
+                  data-picker-target="startPoint">
+                  Saved locations
+                </button>
+              </span>
+              <div class="location-picker-panel" data-picker-panel="startPoint" hidden>
+                <div class="location-picker-header">
+                  <strong>Saved locations</strong>
+                  <button type="button" class="location-picker-close" aria-label="Close saved locations">
+                    ×
+                  </button>
+                </div>
+                <div class="location-picker-list"></div>
+              </div>
               <div class="location-field-row">
                 <input type="text" name="startPointDisplay" placeholder="Sintra" autocomplete="off" required />
                 <input type="hidden" name="startPoint" />
@@ -64,39 +79,27 @@
                   <img src="images/icon_map.svg" alt="" />
                 </button>
               </div>
-            </label>
+            </div>
             <button type="button" id="swap-route-button" class="button-secondary route-swap-button"
               aria-label="Swap start and end points" title="Swap start and end points">
               <span aria-hidden="true">⇄</span>
             </button>
-            <label class="endpoint-label">
+            <div class="route-point-field">
               <span class="field-label-row">
                 <span>End point <span class="label-required" aria-hidden="true">*</span></span>
-                <button type="button" id="toggle-office-picker-button" class="field-inline-action" aria-expanded="false"
-                  aria-controls="office-picker-panel">
-                  See all offices
+                <button type="button" class="field-inline-action location-picker-trigger" aria-expanded="false"
+                  data-picker-target="endPoint">
+                  Saved locations
                 </button>
               </span>
-              <div id="office-picker-panel" class="office-picker-panel" hidden>
-                <div class="office-picker-header">
-                  <strong>Choose office</strong>
-                  <button type="button" id="close-office-picker-button" class="office-picker-close"
-                    aria-label="Close office list">
+              <div class="location-picker-panel" data-picker-panel="endPoint" hidden>
+                <div class="location-picker-header">
+                  <strong>Saved locations</strong>
+                  <button type="button" class="location-picker-close" aria-label="Close saved locations">
                     ×
                   </button>
                 </div>
-                <button type="button" class="office-picker-option" data-office-location="LISBON">
-                  <span class="office-picker-option-title">Lisbon office</span>
-                  <span class="office-picker-option-meta">Avenida Aquilino Ribeiro Machado 8</span>
-                </button>
-                <button type="button" class="office-picker-option" data-office-location="PORTO">
-                  <span class="office-picker-option-title">Porto office</span>
-                  <span class="office-picker-option-meta">Rua Dr. António Luis Gomes 10</span>
-                </button>
-                <button type="button" class="office-picker-option" data-office-location="BRAGA">
-                  <span class="office-picker-option-title">Braga office</span>
-                  <span class="office-picker-option-meta">Avenida Dom Joao II 374</span>
-                </button>
+                <div class="location-picker-list"></div>
               </div>
               <div class="location-field-row">
                 <input type="text" name="endPointDisplay" placeholder="Lisbon Office" autocomplete="off" required />
@@ -106,7 +109,7 @@
                   <img src="images/icon_map.svg" alt="" />
                 </button>
               </div>
-            </label>
+            </div>
           </div>
           <div class="schedule-fields full-width">
             <div class="schedule-date-row">

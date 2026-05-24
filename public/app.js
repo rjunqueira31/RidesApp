@@ -15,22 +15,6 @@ const state = {
     openOnly: false,
   },
 };
-
-const OFFICE_LOCATIONS = {
-  LISBON: {
-    label: 'Lisbon',
-    address:
-        'Avenida Aquilino Ribeiro Machado 8, 1800-142 Lisboa, Lisboa, Portugal',
-  },
-  PORTO: {
-    label: 'Porto',
-    address: 'Rua Dr. António Luis Gomes 10, 4000-091 Porto',
-  },
-  BRAGA: {
-    label: 'Braga',
-    address: 'Avenida Dom Joao II 374, 4715-275 Braga',
-  },
-};
 const DEFAULT_MAPBOX_PROXIMITY = {
   longitude: -9.1393,
   latitude: 38.7223,
@@ -360,11 +344,11 @@ function floorToMinute(date) {
   return normalized;
 }
 
-function roundUpToNextMinute(date) {
+function roundUpToNextTenMinutes(date) {
   const rounded = floorToMinute(date);
 
   if (date.getSeconds() !== 0 || date.getMilliseconds() !== 0) {
-    rounded.setMinutes(rounded.getMinutes() + 1);
+    rounded.setMinutes(rounded.getMinutes() + 10);
   }
 
   return rounded;
@@ -550,11 +534,6 @@ function getPrimaryLocationLabel(value) {
     return '';
   }
 
-  const officeLocation = getOfficeLocationByAddress(trimmedValue);
-  if (officeLocation) {
-    return formatOfficeLocation(officeLocation);
-  }
-
   return trimmedValue.split(',')[0].trim() || trimmedValue;
 }
 
@@ -619,7 +598,7 @@ function initializeLocationAutocomplete(input) {
     return;
   }
 
-  const field = input.closest('label');
+  const field = input.closest('label') || input.closest('.route-point-field');
   if (!field || field.querySelector('.location-autocomplete-results')) {
     return;
   }
@@ -881,7 +860,10 @@ function renderRideDetailsContent(ride) {
     <div class="ride-details-summary">
       <div class="card-grid ride-details-grid">
         <div class="ride-details-grid-window">
-          <strong>${isExactDeparture(ride.startWindowStart, ride.startWindowEnd) ? 'Departure' : 'Window'}</strong>
+          <strong>${
+      isExactDeparture(ride.startWindowStart, ride.startWindowEnd) ?
+          'Departure' :
+          'Window'}</strong>
           <div class="meta">${
       escapeHtml(formatDateTimeRange(
           ride.startWindowStart, ride.startWindowEnd))}</div>
@@ -1072,7 +1054,7 @@ function ensureRidePublishModal() {
       applyUserRouteDefaults(form);
       dateInput.value = formatDateForInput(new Date());
       startTimeInput.value =
-          formatTimeForInput(roundUpToNextMinute(new Date()));
+          formatTimeForInput(roundUpToNextTenMinutes(new Date()));
       endTimeInput.value = addMinutesToTime(startTimeInput.value, 60);
       syncRideTimeConstraints(dateInput, startTimeInput, endTimeInput);
       pendingRidePublish = null;
@@ -1211,30 +1193,6 @@ function openDeleteAccountModal() {
   modal.hidden = false;
 }
 
-function formatOfficeLocation(value) {
-  const label = OFFICE_LOCATIONS[value]?.label || '';
-  return label ? `${label} office` : '';
-}
-
-function getOfficeAddress(value) {
-  return OFFICE_LOCATIONS[value]?.address || '';
-}
-
-function getOfficeLocationByAddress(address) {
-  const normalizedAddress = String(address || '').trim().toLowerCase();
-  if (!normalizedAddress) {
-    return '';
-  }
-
-  return Object.entries(OFFICE_LOCATIONS)
-             .find(([, office]) => {
-               return String(office.address || '').trim().toLowerCase() ===
-                   normalizedAddress;
-             })
-             ?.[0] ||
-      '';
-}
-
 function syncSelectPlaceholderState(select) {
   if (!select) {
     return;
@@ -1246,19 +1204,10 @@ function syncSelectPlaceholderState(select) {
 function applyUserRouteDefaults(form) {
   const {hiddenInput: startPointInput} =
       getLocationFieldElements('startPoint', form);
-  const {hiddenInput: endPointInput} =
-      getLocationFieldElements('endPoint', form);
 
   if (startPointInput && !startPointInput.value) {
     setLocationFieldValue(
         'startPoint', state.currentUser.defaultStartingLocation || '', form);
-  }
-
-  if (endPointInput && !endPointInput.value) {
-    setLocationFieldValue(
-        'endPoint', getOfficeAddress(state.currentUser.defaultOffice), form, {
-          displayValue: formatOfficeLocation(state.currentUser.defaultOffice),
-        });
   }
 }
 
@@ -1946,8 +1895,8 @@ function renderUserSearchCard(profile) {
         </div>
         ${messageButton}
       </div>
-      <p class="meta"><strong>Default office:</strong> ${
-      escapeHtml(formatOfficeLocation(profile.defaultOffice) || '—')}</p>
+      <p class="meta"><strong>Default start:</strong> ${
+      escapeHtml(getPrimaryLocationLabel(profile.defaultStartingLocation) || '—')}</p>
     </article>
   `;
 }
@@ -2119,7 +2068,10 @@ function renderRideCard(ride, options = {}) {
 
       <div class="card-grid">
         <div class="ride-window-field">
-          <strong>${isExactDeparture(ride.startWindowStart, ride.startWindowEnd) ? 'Departure' : 'Window'}</strong>
+          <strong>${
+      isExactDeparture(ride.startWindowStart, ride.startWindowEnd) ?
+          'Departure' :
+          'Window'}</strong>
           <div class="meta ride-window-meta">${
       formatDateTimeRange(ride.startWindowStart, ride.startWindowEnd)}</div>
         </div>
@@ -2268,7 +2220,6 @@ async function setupSignupPage() {
     return;
   }
 
-  const officeSelect = document.querySelector('select[name="defaultOffice"]');
   const passwordInput = document.querySelector('input[name="password"]');
   const {displayInput: defaultStartingLocationInput} =
       getLocationFieldElements('defaultStartingLocation');
@@ -2276,10 +2227,6 @@ async function setupSignupPage() {
     defaultStartingLocationInput.dataset.locationField =
         'defaultStartingLocation';
   }
-  syncSelectPlaceholderState(officeSelect);
-  officeSelect?.addEventListener('change', () => {
-    syncSelectPlaceholderState(officeSelect);
-  });
   initializeLocationAutocomplete(defaultStartingLocationInput);
   await setupLocationMapTriggers();
 
@@ -2785,25 +2732,22 @@ async function setupCreateRidePage() {
       getLocationFieldElements('startPoint', form);
   const {displayInput: endPointInput} =
       getLocationFieldElements('endPoint', form);
-  const officePickerButton =
-      document.querySelector('#toggle-office-picker-button');
-  const officePickerPanel = document.querySelector('#office-picker-panel');
-  const closeOfficePickerButton =
-      document.querySelector('#close-office-picker-button');
-  const officePickerOptions = officePickerPanel ?
-      Array.from(officePickerPanel.querySelectorAll('[data-office-location]')) :
-      [];
+  const locationPickerTriggers =
+      form.querySelectorAll('.location-picker-trigger');
+  const locationPickerPanels =
+      form.querySelectorAll('.location-picker-panel');
   const dateInput = form.querySelector('input[name="rideDate"]');
   const startTimeInput = form.querySelector('input[name="startTime"]');
   const endTimeInput = form.querySelector('input[name="endTime"]');
   const endTimeLabel = document.querySelector('#end-time-label');
   const startTimeLabelText = document.querySelector('#start-time-label-text');
   const timeWindowToggle = document.querySelector('#toggle-time-window');
-  const timeWindowOptions = timeWindowToggle.querySelectorAll('.time-mode-option');
+  const timeWindowOptions =
+      timeWindowToggle.querySelectorAll('.time-mode-option');
   const swapRouteButton = document.querySelector('#swap-route-button');
   let useTimeWindow = false;
   const today = new Date();
-  const nextMinute = roundUpToNextMinute(today);
+  const nextMinute = roundUpToNextTenMinutes(today);
 
   dateInput.min = formatDateForInput(today);
   dateInput.value = formatDateForInput(today);
@@ -2814,9 +2758,9 @@ async function setupCreateRidePage() {
       const mode = option.dataset.timeMode;
       useTimeWindow = mode === 'window';
 
-      timeWindowOptions.forEach((opt) =>
-        opt.classList.toggle('time-mode-option-active',
-            opt.dataset.timeMode === mode));
+      timeWindowOptions.forEach(
+          (opt) => opt.classList.toggle(
+              'time-mode-option-active', opt.dataset.timeMode === mode));
 
       endTimeLabel.hidden = !useTimeWindow;
       startTimeLabelText.textContent =
@@ -2851,95 +2795,109 @@ async function setupCreateRidePage() {
   initializeLocationAutocomplete(endPointInput);
   await setupLocationMapTriggers();
 
-  const closeOfficePicker = () => {
-    if (!officePickerButton || !officePickerPanel) {
+  const closeAllLocationPickers = () => {
+    locationPickerPanels.forEach((panel) => {
+      panel.hidden = true;
+    });
+    locationPickerTriggers.forEach((trigger) => {
+      trigger.setAttribute('aria-expanded', 'false');
+    });
+  };
+
+  const renderLocationPickerOptions = () => {
+    locationPickerPanels.forEach((panel) => {
+      const listContainer = panel.querySelector('.location-picker-list');
+      if (!listContainer) {
+        return;
+      }
+
+      const locations = state.currentUser?.favoriteLocations || [];
+      if (!locations.length) {
+        listContainer.innerHTML =
+            '<p class="location-picker-empty">No saved locations yet. Add them from your <a href="profile.html">profile</a>.</p>';
+        return;
+      }
+
+      listContainer.innerHTML = locations.map((location) => {
+        const displayLabel =
+            location.label || getPrimaryLocationLabel(location.address);
+        const meta = location.label ?
+            getPrimaryLocationLabel(location.address) :
+            '';
+        return `
+          <button type="button" class="location-picker-option"
+              data-location-address="${escapeHtml(location.address)}">
+            <span class="location-picker-option-title">${
+            escapeHtml(displayLabel)}</span>
+            ${
+            meta ?
+                `<span class="location-picker-option-meta">${
+                    escapeHtml(meta)}</span>` :
+                ''}
+          </button>`;
+      }).join('');
+    });
+  };
+
+  renderLocationPickerOptions();
+
+  locationPickerTriggers.forEach((trigger) => {
+    trigger.addEventListener('click', () => {
+      const targetField = trigger.dataset.pickerTarget;
+      const panel =
+          form.querySelector(`[data-picker-panel="${targetField}"]`);
+      if (!panel) {
+        return;
+      }
+
+      const isOpen = !panel.hidden;
+      closeAllLocationPickers();
+
+      if (!isOpen) {
+        panel.hidden = false;
+        trigger.setAttribute('aria-expanded', 'true');
+      }
+    });
+  });
+
+  locationPickerPanels.forEach((panel) => {
+    const targetField = panel.dataset.pickerPanel;
+
+    panel.addEventListener('click', (event) => {
+      const option = event.target.closest('[data-location-address]');
+      if (option) {
+        setLocationFieldValue(
+            targetField, option.dataset.locationAddress, form);
+        closeAllLocationPickers();
+        return;
+      }
+
+      if (event.target.closest('.location-picker-close')) {
+        closeAllLocationPickers();
+      }
+    });
+  });
+
+  document.addEventListener('click', (event) => {
+    if (event.target.closest('.location-picker-panel') ||
+        event.target.closest('.location-picker-trigger')) {
       return;
     }
 
-    officePickerPanel.hidden = true;
-    officePickerButton.setAttribute('aria-expanded', 'false');
-  };
+    closeAllLocationPickers();
+  });
 
-  const openOfficePicker = () => {
-    if (!officePickerButton || !officePickerPanel) {
-      return;
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeAllLocationPickers();
     }
-
-    officePickerPanel.hidden = false;
-    officePickerButton.setAttribute('aria-expanded', 'true');
-  };
-
-  const syncOfficePickerSelection = () => {
-    const {hiddenInput} = getLocationFieldElements('endPoint', form);
-    const selectedOffice = getOfficeLocationByAddress(hiddenInput?.value || '');
-
-    officePickerOptions.forEach((option) => {
-      const isActive = option.dataset.officeLocation === selectedOffice;
-      option.classList.toggle('office-picker-option-active', isActive);
-      option.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-    });
-  };
-
-  const applyOfficeSelection = (officeLocation) => {
-    setLocationFieldValue('endPoint', getOfficeAddress(officeLocation), form, {
-      displayValue: formatOfficeLocation(officeLocation),
-    });
-    syncOfficePickerSelection();
-  };
-
-  if (officePickerButton && officePickerPanel) {
-    syncOfficePickerSelection();
-
-    officePickerButton.addEventListener('click', () => {
-      if (officePickerPanel.hidden) {
-        openOfficePicker();
-        return;
-      }
-
-      closeOfficePicker();
-    });
-
-    officePickerOptions.forEach((option) => {
-      option.addEventListener('click', () => {
-        applyOfficeSelection(option.dataset.officeLocation || '');
-        closeOfficePicker();
-      });
-    });
-
-    closeOfficePickerButton?.addEventListener('click', () => {
-      closeOfficePicker();
-      officePickerButton.focus();
-    });
-
-    document.addEventListener('click', (event) => {
-      if (officePickerPanel.hidden) {
-        return;
-      }
-
-      if (event.target.closest('#office-picker-panel') ||
-          event.target.closest('#toggle-office-picker-button')) {
-        return;
-      }
-
-      closeOfficePicker();
-    });
-
-    document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && !officePickerPanel.hidden) {
-        closeOfficePicker();
-      }
-    });
-
-    endPointInput?.addEventListener('input', syncOfficePickerSelection);
-    endPointInput?.addEventListener('change', syncOfficePickerSelection);
-  }
+  });
 
   syncRideTimeConstraints(dateInput, startTimeInput, endTimeInput);
 
   if (swapRouteButton) {
     swapRouteButton.addEventListener('click', () => {
       swapLocationFieldValues('startPoint', 'endPoint', form);
-      syncOfficePickerSelection();
     });
   }
 
@@ -3110,16 +3068,160 @@ async function setupMyRidesPage() {
   await handleRideActions(passengerContainer, refresh);
 }
 
+async function setupFavoriteLocations() {
+  const container = document.querySelector('#favorite-locations-section');
+  if (!container) {
+    return;
+  }
+
+  const list = container.querySelector('#favorite-locations-list');
+  const addForm = container.querySelector('#add-favorite-location-form');
+  const feedback = container.querySelector('#favorite-locations-feedback');
+  const toggleAddButton =
+      container.querySelector('#toggle-add-location-button');
+
+  if (toggleAddButton && addForm) {
+    toggleAddButton.addEventListener('click', () => {
+      addForm.hidden = !addForm.hidden;
+      if (!addForm.hidden) {
+        addForm.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+      }
+    });
+  }
+
+  const renderList = () => {
+    const locations = state.currentUser?.favoriteLocations || [];
+    if (!locations.length) {
+      list.innerHTML =
+          '<p class="empty-state">No saved locations yet.</p>';
+      return;
+    }
+
+    list.innerHTML = locations.map((location) => {
+      const displayLabel =
+          location.label || getPrimaryLocationLabel(location.address);
+      const meta = location.label ?
+          getPrimaryLocationLabel(location.address) :
+          '';
+      return `
+        <div class="favorite-location-item">
+          <div class="favorite-location-info">
+            <span class="favorite-location-label">${
+          escapeHtml(displayLabel)}</span>
+            ${
+          meta ?
+              `<span class="favorite-location-meta">${
+                  escapeHtml(meta)}</span>` :
+              ''}
+          </div>
+          <button type="button" class="button-secondary favorite-location-remove"
+              data-location-id="${escapeHtml(location.id)}"
+              aria-label="Remove ${escapeHtml(displayLabel)}">
+            ×
+          </button>
+        </div>`;
+    }).join('');
+  };
+
+  renderList();
+
+  list.addEventListener('click', async (event) => {
+    const removeButton = event.target.closest('[data-location-id]');
+    if (!removeButton) {
+      return;
+    }
+
+    const locationId = removeButton.dataset.locationId;
+    try {
+      await api(`/api/profiles/locations/${encodeURIComponent(locationId)}`, {
+        method: 'DELETE',
+      });
+
+      state.currentUser.favoriteLocations =
+          (state.currentUser.favoriteLocations || [])
+              .filter((loc) => loc.id !== locationId);
+      renderList();
+    } catch (error) {
+      if (feedback) {
+        feedback.textContent = error.message;
+        feedback.classList.add('feedback-error');
+      }
+    }
+  });
+
+  if (addForm) {
+    const addressInput = addForm.querySelector('input[name="locationAddress"]');
+    const {displayInput: addressDisplayInput} =
+        getLocationFieldElements('locationAddress', addForm);
+    if (addressDisplayInput) {
+      addressDisplayInput.dataset.locationField = 'locationAddress';
+    }
+    initializeLocationAutocomplete(addressDisplayInput);
+
+    addForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const formData = new FormData(addForm);
+      const label = String(formData.get('locationLabel') || '').trim();
+      const address =
+          String(addressInput?.value || formData.get('locationAddress') || '')
+              .trim();
+
+      if (!address) {
+        return;
+      }
+
+      try {
+        const payload = await api('/api/profiles/locations', {
+          method: 'POST',
+          body: JSON.stringify({label, address}),
+        });
+
+        state.currentUser.favoriteLocations =
+            [...(state.currentUser.favoriteLocations || []),
+             payload.location];
+        renderList();
+        addForm.reset();
+        addForm.hidden = true;
+        if (feedback) {
+          feedback.textContent = '';
+          feedback.classList.remove('feedback-error');
+        }
+      } catch (error) {
+        if (feedback) {
+          feedback.textContent = error.message;
+          feedback.classList.add('feedback-error');
+        }
+      }
+    });
+  }
+}
+
 async function setupProfilePage() {
   const form = document.querySelector('#profile-update-form');
   const deleteAccountButton = document.querySelector('#delete-account-button');
+
+  // Tab switching
+  const tabs = document.querySelectorAll('[data-profile-tab]');
+  const panels = document.querySelectorAll('[data-profile-panel]');
+  tabs.forEach((tab) => {
+    tab.addEventListener('click', () => {
+      tabs.forEach((t) => t.classList.remove('profile-tab-active'));
+      panels.forEach((p) => p.hidden = true);
+      tab.classList.add('profile-tab-active');
+      const panel =
+          document.querySelector(`[data-profile-panel="${tab.dataset.profileTab}"]`);
+      if (panel) {
+        panel.hidden = false;
+      }
+    });
+  });
+
   const {displayInput: defaultStartingLocationInput} =
       getLocationFieldElements('defaultStartingLocation', form);
   form.elements.name.value = state.currentUser.name || '';
   form.elements.email.value = state.currentUser.email || '';
   form.elements.phone.value = state.currentUser.phone || '';
   form.elements.defaultCar.value = state.currentUser.defaultCar || '';
-  form.elements.defaultOffice.value = state.currentUser.defaultOffice || '';
   if (defaultStartingLocationInput) {
     defaultStartingLocationInput.dataset.locationField =
         'defaultStartingLocation';
@@ -3129,18 +3231,25 @@ async function setupProfilePage() {
       state.currentUser.defaultStartingLocation || '', form);
   initializeLocationAutocomplete(defaultStartingLocationInput);
 
-  syncSelectPlaceholderState(form.elements.defaultOffice);
-  form.elements.defaultOffice.addEventListener('change', () => {
-    syncSelectPlaceholderState(form.elements.defaultOffice);
-  });
-
   await setupLocationMapTriggers();
+  await setupFavoriteLocations();
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     const currentEmail = state.currentUser.email;
     const formData = new FormData(form);
     const profile = Object.fromEntries(formData.entries());
+
+    const fieldsToCompare = [
+      'name', 'email', 'phone', 'defaultCar', 'defaultStartingLocation',
+    ];
+    const hasChanges = fieldsToCompare.some(
+        (field) => (profile[field] || '') !== (state.currentUser[field] || ''));
+
+    if (!hasChanges) {
+      redirectTo(consumeReturnPath(PROFILE_RETURN_PATH_KEY, 'dashboard.html'));
+      return;
+    }
 
     try {
       const payload =
