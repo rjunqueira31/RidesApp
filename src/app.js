@@ -19,6 +19,7 @@ const authRoutes = require('./routes/auth');
 const profileRoutes = require('./routes/profiles');
 const {rideRoutes, requestRoutes} = require('./routes/rides');
 const dmRoutes = require('./routes/dm');
+const notificationRoutes = require('./routes/notifications');
 
 const app = express();
 const server = http.createServer(app);
@@ -86,6 +87,7 @@ app.use('/api/profiles', requireAuth, profileRoutes);
 app.use('/api/rides', requireAuth, rideRoutes);
 app.use('/api/requests', requireAuth, requestRoutes);
 app.use('/api/dm', requireAuth, dmRoutes);
+app.use('/api/notifications', requireAuth, notificationRoutes);
 
 // --- Error handler ---
 

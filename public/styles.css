@@ -630,10 +630,6 @@ body > .shell {
   padding: 1.1rem;
 }
 
-.accent-panel {
-  background: linear-gradient(135deg, var(--accent-dark-8), var(--accent-20));
-}
-
 .visual-panel ul {
   margin: 0.75rem 0 0;
   padding-left: 1.1rem;
@@ -2148,6 +2144,178 @@ body[data-page="messages"] > .shell {
   pointer-events: none;
 }
 
+/* --- Notifications dropdown --- */
+
+.nav-link-notifications {
+  position: relative;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  padding: 0;
+  color: var(--muted);
+  border-radius: 0;
+  box-shadow: none;
+  transform: none;
+  transition: color 0.18s ease;
+}
+
+.nav-link-notifications:hover {
+  color: var(--text);
+  transform: none;
+  box-shadow: none;
+  background: none;
+}
+
+.nav-notifications-badge {
+  position: absolute;
+  top: -0.5rem;
+  right: -0.8rem;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: var(--white);
+  font-size: 0.5rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.mobile-notifications-bell {
+  display: none;
+  position: relative;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 0.4rem;
+  padding-top: 0.65rem;
+  border-radius: 50%;
+  line-height: 0;
+}
+
+.mobile-notifications-bell:hover {
+  color: var(--text);
+  background: var(--accent-soft);
+}
+
+.mobile-notifications-bell .nav-notifications-badge {
+  position: absolute;
+  top: -0.1rem;
+  right: -0.2rem;
+}
+
+.notifications-dropdown {
+  position: fixed;
+  width: min(360px, calc(100vw - 2rem));
+  max-height: 420px;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  z-index: 1000;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.notifications-dropdown.open {
+  display: flex;
+}
+
+.notifications-dropdown-header {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--accent-dark);
+}
+
+.notifications-dropdown-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.notifications-dropdown-empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.notification-item {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.notification-item:last-child {
+  border-bottom: none;
+}
+
+@media (hover: hover) {
+  .notification-item:hover {
+    background: var(--accent-soft);
+  }
+
+  .notification-item.unread:hover {
+    background: var(--accent-soft-hover, #e8e5f5);
+  }
+}
+
+.notification-item.unread {
+  background: var(--accent-soft);
+}
+
+.notification-item-title {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--accent-dark);
+  margin-bottom: 0.15rem;
+}
+
+.notification-item-body {
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-bottom: 0.25rem;
+}
+
+.notification-item-time {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.notifications-dropdown-footer {
+  padding: 0.6rem 1rem;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+
+.notifications-mark-all-button {
+  background: none;
+  border: none;
+  color: var(--accent-dark);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+.notifications-mark-all-button:hover {
+  background: var(--accent-soft);
+}
+
 .dm-user-card-button {
   display: inline-flex;
   align-items: center;
@@ -2923,5 +3091,18 @@ body[data-page="messages"] > .shell {
   .nav-unread-badge {
     top: 0.2rem;
     right: 0.6rem;
+  }
+
+  .nav-notifications-badge {
+    top: 0.2rem;
+    right: 0.6rem;
+  }
+
+  .mobile-notifications-bell {
+    display: inline-flex;
+    position: fixed;
+    top: 1.35rem;
+    right: 5rem;
+    z-index: 30;
   }
 }

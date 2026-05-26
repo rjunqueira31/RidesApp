@@ -1,6 +1,5 @@
 const {randomInt} = require('crypto');
-const {Prisma, SeatRequestStatus, UserRole} =
-    require('@prisma/client');
+const {Prisma, SeatRequestStatus, UserRole} = require('@prisma/client');
 
 const prisma = require('./db');
 
@@ -49,11 +48,12 @@ function toPublicProfile(profile) {
     phone: profile.phone,
     defaultCar: profile.defaultCar || '',
     defaultStartingLocation: profile.defaultStartingLocation || '',
-    favoriteLocations: (profile.favoriteLocations || []).map((loc) => ({
-      id: loc.id,
-      label: loc.label || '',
-      address: loc.address,
-    })),
+    favoriteLocations:
+        (profile.favoriteLocations || []).map((loc) => ({
+                                                id: loc.id,
+                                                label: loc.label || '',
+                                                address: loc.address,
+                                              })),
     role: profile.role,
     createdAt: toIsoString(profile.createdAt),
     updatedAt: toIsoString(profile.updatedAt),
@@ -903,6 +903,54 @@ async function removeFavoriteLocation(userId, locationId) {
   });
 }
 
+// --- Notifications ---
+
+async function getNotifications(userId) {
+  return prisma.notification.findMany({
+    where: {userId},
+    orderBy: {createdAt: 'desc'},
+    take: 50,
+  });
+}
+
+async function getUnreadNotificationCount(userId) {
+  return prisma.notification.count({
+    where: {userId, read: false},
+  });
+}
+
+async function markNotificationRead(userId, notificationId) {
+  const notification = await prisma.notification.findFirst({
+    where: {id: notificationId, userId},
+  });
+
+  if (!notification) {
+    throw new Error('Notification not found.');
+  }
+
+  await prisma.notification.update({
+    where: {id: notification.id},
+    data: {read: true},
+  });
+}
+
+async function markAllNotificationsRead(userId) {
+  await prisma.notification.updateMany({
+    where: {userId, read: false},
+    data: {read: true},
+  });
+}
+
+async function createNotification(userId, {title, body}) {
+  return prisma.notification.create({
+    data: {
+      userId,
+      title: normalizeText(title),
+      body: normalizeText(body) || null,
+    },
+  });
+}
+
 module.exports = {
   addFavoriteLocation,
   cancelSeatRequest,
@@ -924,4 +972,9 @@ module.exports = {
   getConversationMessages,
   getUnreadCount,
   markConversationRead,
+  createNotification,
+  getNotifications,
+  getUnreadNotificationCount,
+  markNotificationRead,
+  markAllNotificationsRead,
 };

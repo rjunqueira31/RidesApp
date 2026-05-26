@@ -1248,6 +1248,185 @@ async function refreshUnreadBadges() {
   updateUnreadBadges(count);
 }
 
+// --- Notifications ---
+
+async function fetchNotificationUnreadCount() {
+  try {
+    const payload = await api('/api/notifications/unread-count');
+    return payload.count;
+  } catch {
+    return 0;
+  }
+}
+
+function updateNotificationBadges(count) {
+  document.querySelectorAll('.nav-notifications-badge').forEach((badge) => {
+    if (count > 0) {
+      badge.hidden = false;
+      badge.textContent = count > 99 ? '99+' : String(count);
+    } else {
+      badge.hidden = true;
+      badge.textContent = '';
+    }
+  });
+}
+
+async function refreshNotificationBadges() {
+  if (!state.currentUser) return;
+  const count = await fetchNotificationUnreadCount();
+  updateNotificationBadges(count);
+}
+
+function formatNotificationTime(isoString) {
+  const date = new Date(isoString);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
+}
+
+function createNotificationsDropdown() {
+  const existing = document.querySelector('.notifications-dropdown');
+  if (existing) return existing;
+
+  const dropdown = document.createElement('div');
+  dropdown.className = 'notifications-dropdown';
+  dropdown.innerHTML = `
+    <div class="notifications-dropdown-header">Notifications</div>
+    <ul class="notifications-dropdown-list"></ul>
+    <div class="notifications-dropdown-footer">
+      <button type="button" class="notifications-mark-all-button">Mark all as read</button>
+    </div>
+  `;
+  return dropdown;
+}
+
+function renderNotificationsList(notifications, listElement) {
+  if (!notifications.length) {
+    listElement.innerHTML =
+        '<li class="notifications-dropdown-empty">No notifications</li>';
+    return;
+  }
+
+  listElement.innerHTML =
+      notifications
+          .map(
+              (notification) => `
+    <li class="notification-item ${notification.read ? '' : 'unread'}"
+        data-notification-id="${escapeHtml(notification.id)}">
+      <div class="notification-item-title">${
+                  escapeHtml(notification.title)}</div>
+      ${
+                  notification.body ?
+                      `<div class="notification-item-body">${
+                          escapeHtml(notification.body)}</div>` :
+                      ''}
+      <div class="notification-item-time">${
+                  formatNotificationTime(notification.createdAt)}</div>
+    </li>
+  `).join('');
+}
+
+async function loadAndRenderNotifications(dropdown) {
+  const list = dropdown.querySelector('.notifications-dropdown-list');
+  try {
+    const payload = await api('/api/notifications');
+    renderNotificationsList(payload.notifications, list);
+  } catch {
+    list.innerHTML =
+        '<li class="notifications-dropdown-empty">Failed to load notifications</li>';
+  }
+}
+
+function setupNotificationsDropdown() {
+  const toggleButtons =
+      document.querySelectorAll('[data-notifications-toggle]');
+  if (!toggleButtons.length) return;
+
+  const dropdown = createNotificationsDropdown();
+  document.body.appendChild(dropdown);
+
+  function positionDropdown(anchor) {
+    const rect = anchor.getBoundingClientRect();
+    const dropdownWidth = Math.min(360, window.innerWidth - 32);
+    const buttonCenter = rect.left + rect.width / 2;
+    let right = window.innerWidth - (buttonCenter + dropdownWidth / 2);
+    // Ensure dropdown doesn't overflow the right edge
+    if (right < 16) right = 16;
+    // Ensure dropdown doesn't overflow the left edge
+    if (window.innerWidth - right - dropdownWidth < 16) {
+      right = window.innerWidth - dropdownWidth - 16;
+    }
+    dropdown.style.top = `${rect.bottom + 8}px`;
+    dropdown.style.right = `${right}px`;
+  }
+
+  // Toggle open/close on any notifications button click
+  toggleButtons.forEach((button) => {
+    button.addEventListener('click', async (event) => {
+      event.stopPropagation();
+      const isOpen = dropdown.classList.contains('open');
+
+      if (isOpen) {
+        dropdown.classList.remove('open');
+      } else {
+        positionDropdown(button);
+        dropdown.classList.add('open');
+        await loadAndRenderNotifications(dropdown);
+      }
+    });
+  });
+
+  // Close when clicking outside
+  document.addEventListener('click', (event) => {
+    if (!dropdown.contains(event.target) &&
+        !event.target.closest('[data-notifications-toggle]')) {
+      dropdown.classList.remove('open');
+    }
+  });
+
+  // Mark single notification as read
+  dropdown.addEventListener('click', async (event) => {
+    const item = event.target.closest('.notification-item');
+    if (!item || !item.classList.contains('unread')) return;
+
+    item.classList.remove('unread');
+    const notificationId = item.dataset.notificationId;
+    try {
+      const payload = await api(`/api/notifications/${notificationId}/read`, {
+        method: 'POST',
+      });
+      updateNotificationBadges(payload.unreadCount);
+    } catch {
+      item.classList.add('unread');
+    }
+  });
+
+  // Mark all as read
+  const markAllButton =
+      dropdown.querySelector('.notifications-mark-all-button');
+  markAllButton.addEventListener('click', async () => {
+    try {
+      const payload = await api('/api/notifications/mark-all-read', {
+        method: 'POST',
+      });
+      updateNotificationBadges(payload.unreadCount);
+      dropdown.querySelectorAll('.notification-item.unread').forEach((item) => {
+        item.classList.remove('unread');
+      });
+    } catch {
+      // silently fail
+    }
+  });
+}
+
 function formatDmTime(isoString) {
   const date = new Date(isoString);
   const now = new Date();
@@ -1896,7 +2075,8 @@ function renderUserSearchCard(profile) {
         ${messageButton}
       </div>
       <p class="meta"><strong>Default start:</strong> ${
-      escapeHtml(getPrimaryLocationLabel(profile.defaultStartingLocation) || '—')}</p>
+      escapeHtml(
+          getPrimaryLocationLabel(profile.defaultStartingLocation) || '—')}</p>
     </article>
   `;
 }
@@ -2734,8 +2914,7 @@ async function setupCreateRidePage() {
       getLocationFieldElements('endPoint', form);
   const locationPickerTriggers =
       form.querySelectorAll('.location-picker-trigger');
-  const locationPickerPanels =
-      form.querySelectorAll('.location-picker-panel');
+  const locationPickerPanels = form.querySelectorAll('.location-picker-panel');
   const dateInput = form.querySelector('input[name="rideDate"]');
   const startTimeInput = form.querySelector('input[name="startTime"]');
   const endTimeInput = form.querySelector('input[name="endTime"]');
@@ -2818,24 +2997,26 @@ async function setupCreateRidePage() {
         return;
       }
 
-      listContainer.innerHTML = locations.map((location) => {
-        const displayLabel =
-            location.label || getPrimaryLocationLabel(location.address);
-        const meta = location.label ?
-            getPrimaryLocationLabel(location.address) :
-            '';
-        return `
+      listContainer.innerHTML =
+          locations
+              .map((location) => {
+                const displayLabel =
+                    location.label || getPrimaryLocationLabel(location.address);
+                const meta = location.label ?
+                    getPrimaryLocationLabel(location.address) :
+                    '';
+                return `
           <button type="button" class="location-picker-option"
               data-location-address="${escapeHtml(location.address)}">
             <span class="location-picker-option-title">${
-            escapeHtml(displayLabel)}</span>
+                    escapeHtml(displayLabel)}</span>
             ${
-            meta ?
-                `<span class="location-picker-option-meta">${
-                    escapeHtml(meta)}</span>` :
-                ''}
+                    meta ? `<span class="location-picker-option-meta">${
+                               escapeHtml(meta)}</span>` :
+                           ''}
           </button>`;
-      }).join('');
+              })
+              .join('');
     });
   };
 
@@ -2844,8 +3025,7 @@ async function setupCreateRidePage() {
   locationPickerTriggers.forEach((trigger) => {
     trigger.addEventListener('click', () => {
       const targetField = trigger.dataset.pickerTarget;
-      const panel =
-          form.querySelector(`[data-picker-panel="${targetField}"]`);
+      const panel = form.querySelector(`[data-picker-panel="${targetField}"]`);
       if (!panel) {
         return;
       }
@@ -3092,27 +3272,26 @@ async function setupFavoriteLocations() {
   const renderList = () => {
     const locations = state.currentUser?.favoriteLocations || [];
     if (!locations.length) {
-      list.innerHTML =
-          '<p class="empty-state">No saved locations yet.</p>';
+      list.innerHTML = '<p class="empty-state">No saved locations yet.</p>';
       return;
     }
 
-    list.innerHTML = locations.map((location) => {
-      const displayLabel =
-          location.label || getPrimaryLocationLabel(location.address);
-      const meta = location.label ?
-          getPrimaryLocationLabel(location.address) :
-          '';
-      return `
+    list.innerHTML = locations
+                         .map((location) => {
+                           const displayLabel = location.label ||
+                               getPrimaryLocationLabel(location.address);
+                           const meta = location.label ?
+                               getPrimaryLocationLabel(location.address) :
+                               '';
+                           return `
         <div class="favorite-location-item">
           <div class="favorite-location-info">
             <span class="favorite-location-label">${
-          escapeHtml(displayLabel)}</span>
+                               escapeHtml(displayLabel)}</span>
             ${
-          meta ?
-              `<span class="favorite-location-meta">${
-                  escapeHtml(meta)}</span>` :
-              ''}
+                               meta ? `<span class="favorite-location-meta">${
+                                          escapeHtml(meta)}</span>` :
+                                      ''}
           </div>
           <button type="button" class="button-secondary favorite-location-remove"
               data-location-id="${escapeHtml(location.id)}"
@@ -3120,7 +3299,8 @@ async function setupFavoriteLocations() {
             ×
           </button>
         </div>`;
-    }).join('');
+                         })
+                         .join('');
   };
 
   renderList();
@@ -3138,8 +3318,8 @@ async function setupFavoriteLocations() {
       });
 
       state.currentUser.favoriteLocations =
-          (state.currentUser.favoriteLocations || [])
-              .filter((loc) => loc.id !== locationId);
+          (state.currentUser.favoriteLocations ||
+           []).filter((loc) => loc.id !== locationId);
       renderList();
     } catch (error) {
       if (feedback) {
@@ -3177,8 +3357,7 @@ async function setupFavoriteLocations() {
         });
 
         state.currentUser.favoriteLocations =
-            [...(state.currentUser.favoriteLocations || []),
-             payload.location];
+            [...(state.currentUser.favoriteLocations || []), payload.location];
         renderList();
         addForm.reset();
         addForm.hidden = true;
@@ -3208,8 +3387,8 @@ async function setupProfilePage() {
       tabs.forEach((t) => t.classList.remove('profile-tab-active'));
       panels.forEach((p) => p.hidden = true);
       tab.classList.add('profile-tab-active');
-      const panel =
-          document.querySelector(`[data-profile-panel="${tab.dataset.profileTab}"]`);
+      const panel = document.querySelector(
+          `[data-profile-panel="${tab.dataset.profileTab}"]`);
       if (panel) {
         panel.hidden = false;
       }
@@ -3241,7 +3420,11 @@ async function setupProfilePage() {
     const profile = Object.fromEntries(formData.entries());
 
     const fieldsToCompare = [
-      'name', 'email', 'phone', 'defaultCar', 'defaultStartingLocation',
+      'name',
+      'email',
+      'phone',
+      'defaultCar',
+      'defaultStartingLocation',
     ];
     const hasChanges = fieldsToCompare.some(
         (field) => (profile[field] || '') !== (state.currentUser[field] || ''));
@@ -3321,6 +3504,10 @@ async function init() {
   if (state.currentUser) {
     refreshUnreadBadges();
     setInterval(refreshUnreadBadges, 20000);
+
+    setupNotificationsDropdown();
+    refreshNotificationBadges();
+    setInterval(refreshNotificationBadges, 20000);
   }
 }
 

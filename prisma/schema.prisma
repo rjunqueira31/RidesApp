@@ -37,6 +37,7 @@ model User {
   directMessagesSent     DirectMessage[] @relation("DirectMessagesSent")
   directMessagesReceived DirectMessage[] @relation("DirectMessagesReceived")
   favoriteLocations  FavoriteLocation[]
+  notifications      Notification[]
 }
 
 model FavoriteLocation {
@@ -126,4 +127,18 @@ model Session {
 
   @@index([expire], map: "IDX_session_expire")
   @@map("session")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  body      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@index([createdAt])
 }
