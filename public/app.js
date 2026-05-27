@@ -1393,21 +1393,26 @@ function setupNotificationsDropdown() {
   });
 
   // Mark single notification as read
-  dropdown.addEventListener('click', async (event) => {
+  function handleNotificationTap(event) {
     const item = event.target.closest('.notification-item');
     if (!item || !item.classList.contains('unread')) return;
 
+    event.preventDefault();
+    event.stopPropagation();
+
     item.classList.remove('unread');
+    item.style.background = '';
+    // Force synchronous repaint on mobile
+    void item.offsetHeight;
+
     const notificationId = item.dataset.notificationId;
-    try {
-      const payload = await api(`/api/notifications/${notificationId}/read`, {
-        method: 'POST',
-      });
-      updateNotificationBadges(payload.unreadCount);
-    } catch {
-      item.classList.add('unread');
-    }
-  });
+    api(`/api/notifications/${notificationId}/read`, {method: 'POST'})
+        .then((payload) => updateNotificationBadges(payload.unreadCount))
+        .catch(() => item.classList.add('unread'));
+  }
+
+  dropdown.addEventListener('click', handleNotificationTap);
+  dropdown.addEventListener('touchend', handleNotificationTap);
 
   // Mark all as read
   const markAllButton =
