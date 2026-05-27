@@ -24,12 +24,32 @@
       </button>
       <div class="topbar-user" data-mobile-menu-desktop-actions>
         <a href="dashboard.html" class="nav-link">Dashboard</a>
+        <a href="messages.html" class="nav-link nav-link-messages">
+          Messages
+          <span class="nav-unread-badge" hidden></span>
+        </a>
+        <button type="button" class="nav-link nav-link-notifications" data-notifications-toggle>
+          Notifications
+          <span class="nav-notifications-badge" hidden></span>
+        </button>
         <a href="profile.html" class="nav-link">Profile</a>
         <button type="button" id="logout-button" class="button-secondary">Logout</button>
       </div>
+      <button type="button" class="mobile-notifications-bell" data-notifications-toggle aria-label="Notifications">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+        </svg>
+        <span class="nav-notifications-badge" hidden></span>
+      </button>
       <div id="find-users-mobile-menu-panel" class="mobile-menu-panel" data-mobile-menu-panel hidden>
         <div class="mobile-menu-panel-actions">
           <a href="dashboard.html" class="nav-link">Dashboard</a>
+          <a href="messages.html" class="nav-link nav-link-messages">
+            Messages
+            <span class="nav-unread-badge" hidden></span>
+          </a>
           <a href="profile.html" class="nav-link">Profile</a>
           <button type="button" class="button-secondary" data-logout-button>Logout</button>
         </div>
@@ -43,7 +63,7 @@
         <p class="section-copy">Search by name, email, or user ID to quickly find who you need to contact.</p>
 
         <form id="find-users-form" class="toolbar search-toolbar user-search-toolbar">
-          <input type="text" name="query" placeholder="Search by name, email, or #A1B2C3" />
+          <input type="text" name="query" placeholder="Search by name, email, or user ID" />
           <button type="button" id="reset-user-search" class="button-secondary">Reset</button>
         </form>
 
@@ -52,6 +72,7 @@
     </main>
   </div>
 
+  <script src="footer.js"></script>
   <script src="app.js"></script>
 </body>
 

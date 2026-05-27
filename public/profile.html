@@ -25,11 +25,33 @@
       </button>
       <div class="topbar-user" data-mobile-menu-desktop-actions>
         <a href="dashboard.html" class="nav-link">Dashboard</a>
+        <a href="messages.html" class="nav-link nav-link-messages">
+          Messages
+          <span class="nav-unread-badge" hidden></span>
+        </a>
+        <button type="button" class="nav-link nav-link-notifications" data-notifications-toggle>
+          Notifications
+          <span class="nav-notifications-badge" hidden></span>
+        </button>
+        <a href="profile.html" class="nav-link">Profile</a>
         <button type="button" id="logout-button" class="button-secondary">Logout</button>
       </div>
+      <button type="button" class="mobile-notifications-bell" data-notifications-toggle aria-label="Notifications">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+        </svg>
+        <span class="nav-notifications-badge" hidden></span>
+      </button>
       <div id="profile-mobile-menu-panel" class="mobile-menu-panel" data-mobile-menu-panel hidden>
         <div class="mobile-menu-panel-actions">
           <a href="dashboard.html" class="nav-link">Dashboard</a>
+          <a href="messages.html" class="nav-link nav-link-messages">
+            Messages
+            <span class="nav-unread-badge" hidden></span>
+          </a>
+          <a href="profile.html" class="nav-link">Profile</a>
           <button type="button" class="button-secondary" data-logout-button>Logout</button>
         </div>
       </div>
@@ -38,62 +60,91 @@
     <main class="center-layout">
       <section class="form-card">
         <span class="eyebrow">Account settings</span>
-        <h1>Edit profile</h1>
-        <p class="section-copy">Update your profile details.</p>
         <div id="page-feedback" class="feedback" aria-live="polite"></div>
 
-        <form id="profile-update-form" class="stack-form">
-          <label>
-            Name <span class="label-required" aria-hidden="true">*</span>
-            <input type="text" name="name" required />
-          </label>
-          <label>
-            Email <span class="label-required" aria-hidden="true">*</span>
-            <input type="email" name="email" required />
-          </label>
-          <label>
-            Phone number <span class="label-required" aria-hidden="true">*</span>
-            <input type="tel" name="phone" required />
-          </label>
-          <label>
-            Default car <span class="label-optional">(optional)</span>
-            <input type="text" name="defaultCar" />
-          </label>
-          <label>
-            Default starting location <span class="label-optional">(optional)</span>
-            <div class="location-field-row">
-              <input type="text" name="defaultStartingLocationDisplay" autocomplete="off" />
-              <input type="hidden" name="defaultStartingLocation" />
-              <button type="button" class="button-secondary location-map-trigger"
-                data-location-target="defaultStartingLocation" data-location-label="starting location"
-                aria-label="Choose starting location on the map">
-                <img src="images/icon_map.svg" alt="" />
-              </button>
-            </div>
-          </label>
-          <label>
-            Default office <span class="label-optional">(optional)</span>
-            <select name="defaultOffice">
-              <option value="">Select an office</option>
-              <option value="LISBON">Lisbon</option>
-              <option value="PORTO">Porto</option>
-              <option value="BRAGA">Braga</option>
-            </select>
-          </label>
-          <button type="submit">Save changes</button>
-        </form>
+        <nav class="profile-tabs" aria-label="Profile sections">
+          <button type="button" class="profile-tab profile-tab-active" data-profile-tab="profile">Profile</button>
+          <button type="button" class="profile-tab" data-profile-tab="locations">Locations</button>
+        </nav>
 
-        <section class="danger-zone" aria-labelledby="delete-account-title">
-          <h2 id="delete-account-title" class="danger-zone-title">Delete account</h2>
-          <p class="danger-zone-copy">Once you delete your account, there is no going back. This removes your profile,
-            all rides as driver or passenger.</p>
-          <button type="button" id="delete-account-button" class="danger-button">Delete your account</button>
-        </section>
+        <div class="profile-tab-panel" data-profile-panel="profile">
+          <p class="section-copy">Update your profile details.</p>
+          <form id="profile-update-form" class="stack-form">
+            <label>
+              Name <span class="label-required" aria-hidden="true">*</span>
+              <input type="text" name="name" required />
+            </label>
+            <label>
+              Email <span class="label-required" aria-hidden="true">*</span>
+              <input type="email" name="email" required />
+            </label>
+            <label>
+              Phone number <span class="label-required" aria-hidden="true">*</span>
+              <input type="tel" name="phone" required />
+            </label>
+            <label>
+              Default car <span class="label-optional">(optional)</span>
+              <input type="text" name="defaultCar" />
+            </label>
+            <label>
+              Default starting location <span class="label-optional">(optional)</span>
+              <div class="location-field-row">
+                <input type="text" name="defaultStartingLocationDisplay" autocomplete="off" />
+                <input type="hidden" name="defaultStartingLocation" />
+                <button type="button" class="button-secondary location-map-trigger"
+                  data-location-target="defaultStartingLocation" data-location-label="starting location"
+                  aria-label="Choose starting location on the map">
+                  <img src="images/icon_map.svg" alt="" />
+                </button>
+              </div>
+            </label>
+            <button type="submit">Save changes</button>
+          </form>
+
+          <section class="danger-zone" aria-labelledby="delete-account-title">
+            <h2 id="delete-account-title" class="danger-zone-title">Delete account</h2>
+            <p class="danger-zone-copy">Once you delete your account, there is no going back. This removes your profile,
+              all rides as driver or passenger.</p>
+            <button type="button" id="delete-account-button" class="danger-button">Delete your account</button>
+          </section>
+        </div>
+
+        <div class="profile-tab-panel" data-profile-panel="locations" hidden>
+          <section id="favorite-locations-section" class="favorite-locations-section">
+            <div class="favorite-locations-header">
+              <p class="section-copy">Quick-access locations for creating rides.</p>
+              <button type="button" id="toggle-add-location-button" class="button-secondary">+ New location</button>
+            </div>
+            <div id="favorite-locations-feedback" class="feedback" aria-live="polite"></div>
+            <form id="add-favorite-location-form" class="favorite-location-add-form" hidden>
+              <label>
+                Label <span class="label-optional">(optional)</span>
+                <input type="text" name="locationLabel" placeholder="Home, gym, etc." />
+              </label>
+              <label>
+                Address <span class="label-required" aria-hidden="true">*</span>
+                <div class="location-field-row">
+                  <input type="text" name="locationAddressDisplay" placeholder="Search for an address"
+                    autocomplete="off" required />
+                  <input type="hidden" name="locationAddress" />
+                  <button type="button" class="button-secondary location-map-trigger"
+                    data-location-target="locationAddress" data-location-label="location"
+                    aria-label="Choose location on the map">
+                    <img src="images/icon_map.svg" alt="" />
+                  </button>
+                </div>
+              </label>
+              <button type="submit" class="button-secondary">Add location</button>
+            </form>
+            <div id="favorite-locations-list"></div>
+          </section>
+        </div>
       </section>
     </main>
   </div>
 
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.js"></script>
+  <script src="footer.js"></script>
   <script src="app.js"></script>
 </body>
 

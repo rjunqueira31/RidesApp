@@ -16,7 +16,7 @@ function createRateLimitHandler(message) {
 }
 
 const authRateLimit = rateLimit({
-  windowMs: 15 * 60 * 1000,
+  windowMs: 5 * 60 * 1000,
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
@@ -25,7 +25,7 @@ const authRateLimit = rateLimit({
 });
 
 const ridePublishRateLimit = rateLimit({
-  windowMs: 15 * 60 * 1000,
+  windowMs: 5 * 60 * 1000,
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,

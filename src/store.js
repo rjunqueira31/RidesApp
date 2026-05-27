@@ -1,13 +1,10 @@
 const {randomInt} = require('crypto');
-const {OfficeLocation, Prisma, SeatRequestStatus, UserRole} =
-    require('@prisma/client');
+const {Prisma, SeatRequestStatus, UserRole} = require('@prisma/client');
 
 const prisma = require('./db');
 
 const EXPIRED_RIDE_RETENTION_MS = 2 * 60 * 60 * 1000;
 const PUBLIC_ID_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789';
-
-const OFFICE_LOCATION_VALUES = new Set(Object.values(OfficeLocation));
 
 function normalizeText(value) {
   return String(value || '').trim();
@@ -19,11 +16,6 @@ function toIsoString(value) {
 
 function toStatusValue(value) {
   return String(value || '').trim().toUpperCase();
-}
-
-function normalizeOfficeLocation(value) {
-  const normalizedValue = normalizeText(value).toUpperCase();
-  return OFFICE_LOCATION_VALUES.has(normalizedValue) ? normalizedValue : null;
 }
 
 function getManagerEmailSet() {
@@ -55,8 +47,13 @@ function toPublicProfile(profile) {
     email: profile.email,
     phone: profile.phone,
     defaultCar: profile.defaultCar || '',
-    defaultOffice: profile.defaultOffice || '',
     defaultStartingLocation: profile.defaultStartingLocation || '',
+    favoriteLocations:
+        (profile.favoriteLocations || []).map((loc) => ({
+                                                id: loc.id,
+                                                label: loc.label || '',
+                                                address: loc.address,
+                                              })),
     role: profile.role,
     createdAt: toIsoString(profile.createdAt),
     updatedAt: toIsoString(profile.updatedAt),
@@ -161,6 +158,7 @@ async function getUserByEmail(email) {
     where: {
       email: normalizedEmail,
     },
+    include: {favoriteLocations: true},
   });
 }
 
@@ -174,6 +172,7 @@ async function getUserById(userId) {
     where: {
       id: normalizedUserId,
     },
+    include: {favoriteLocations: true},
   });
 }
 
@@ -214,6 +213,7 @@ async function getProfiles(searchQuery) {
 
   const profiles = await prisma.user.findMany({
     where,
+    include: {favoriteLocations: true},
     orderBy: {
       name: 'asc',
     },
@@ -255,12 +255,12 @@ async function createProfile(profileInput) {
           passwordHash: normalizeText(profileInput.passwordHash),
           phone: normalizeText(profileInput.phone),
           defaultCar: normalizeText(profileInput.defaultCar) || null,
-          defaultOffice: normalizeOfficeLocation(profileInput.defaultOffice),
           defaultStartingLocation:
               normalizeText(profileInput.defaultStartingLocation) || null,
           role: getManagerEmailSet().has(email) ? UserRole.MANAGER_USER :
                                                   UserRole.DEFAULT_USER,
         },
+        include: {favoriteLocations: true},
       });
 
       return toPublicProfile(profile);
@@ -302,12 +302,12 @@ async function updateProfile(currentEmail, profileInput) {
       email: nextEmail,
       phone: normalizeText(profileInput.phone),
       defaultCar: normalizeText(profileInput.defaultCar) || null,
-      defaultOffice: normalizeOfficeLocation(profileInput.defaultOffice),
       defaultStartingLocation:
           normalizeText(profileInput.defaultStartingLocation) || null,
       role: getManagerEmailSet().has(nextEmail) ? UserRole.MANAGER_USER :
                                                   UserRole.DEFAULT_USER,
     },
+    include: {favoriteLocations: true},
   });
 
   return toPublicProfile(updatedProfile);
@@ -723,7 +723,236 @@ async function createMessage({rideId, senderEmail, senderId, text}) {
   };
 }
 
+function toPublicDirectMessage(dm) {
+  return {
+    id: dm.id,
+    senderId: dm.senderId,
+    receiverId: dm.receiverId,
+    text: dm.text,
+    read: dm.read,
+    createdAt: toIsoString(dm.createdAt),
+    sender: toPublicProfile(dm.sender),
+    receiver: toPublicProfile(dm.receiver),
+  };
+}
+
+async function createDirectMessage({senderId, receiverId, text}) {
+  const normalizedText = normalizeText(text);
+  if (!normalizedText) {
+    throw new Error('Message text is required.');
+  }
+
+  const sender = await getUserById(senderId);
+  if (!sender) {
+    throw new Error('Sender not found.');
+  }
+
+  const receiver = await getUserById(receiverId);
+  if (!receiver) {
+    throw new Error('Recipient not found.');
+  }
+
+  if (sender.id === receiver.id) {
+    throw new Error('You cannot message yourself.');
+  }
+
+  const dm = await prisma.directMessage.create({
+    data: {
+      senderId: sender.id,
+      receiverId: receiver.id,
+      text: normalizedText,
+    },
+    include: {
+      sender: true,
+      receiver: true,
+    },
+  });
+
+  return toPublicDirectMessage(dm);
+}
+
+async function getConversations(userId) {
+  // Get all DMs where user is sender or receiver, ordered by newest first
+  const messages = await prisma.directMessage.findMany({
+    where: {
+      OR: [
+        {senderId: userId},
+        {receiverId: userId},
+      ],
+    },
+    include: {
+      sender: true,
+      receiver: true,
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  });
+
+  // Group by the other user to build conversation list
+  const conversationMap = new Map();
+
+  for (const dm of messages) {
+    const otherUserId = dm.senderId === userId ? dm.receiverId : dm.senderId;
+
+    if (!conversationMap.has(otherUserId)) {
+      const otherUser = dm.senderId === userId ? dm.receiver : dm.sender;
+      const unreadCount = dm.receiverId === userId && !dm.read ? 1 : 0;
+
+      conversationMap.set(otherUserId, {
+        userId: otherUserId,
+        user: toPublicProfile(otherUser),
+        lastMessage: toPublicDirectMessage(dm),
+        unreadCount,
+      });
+    } else if (dm.receiverId === userId && !dm.read) {
+      conversationMap.get(otherUserId).unreadCount += 1;
+    }
+  }
+
+  return [...conversationMap.values()];
+}
+
+async function getConversationMessages(
+    userId, otherUserId, {limit = 50, before} = {}) {
+  const where = {
+    OR: [
+      {senderId: userId, receiverId: otherUserId},
+      {senderId: otherUserId, receiverId: userId},
+    ],
+  };
+
+  if (before) {
+    where.createdAt = {lt: new Date(before)};
+  }
+
+  const messages = await prisma.directMessage.findMany({
+    where,
+    include: {
+      sender: true,
+      receiver: true,
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+    take: limit,
+  });
+
+  return messages.reverse().map(toPublicDirectMessage);
+}
+
+async function getUnreadCount(userId) {
+  return prisma.directMessage.count({
+    where: {
+      receiverId: userId,
+      read: false,
+    },
+  });
+}
+
+async function markConversationRead(userId, otherUserId) {
+  await prisma.directMessage.updateMany({
+    where: {
+      senderId: otherUserId,
+      receiverId: userId,
+      read: false,
+    },
+    data: {
+      read: true,
+    },
+  });
+}
+
+async function addFavoriteLocation(userId, {label, address}) {
+  const normalizedAddress = normalizeText(address);
+  if (!normalizedAddress) {
+    throw new Error('Address is required.');
+  }
+
+  const location = await prisma.favoriteLocation.create({
+    data: {
+      userId,
+      label: normalizeText(label) || null,
+      address: normalizedAddress,
+    },
+  });
+
+  return {
+    id: location.id,
+    label: location.label || '',
+    address: location.address,
+  };
+}
+
+async function removeFavoriteLocation(userId, locationId) {
+  const location = await prisma.favoriteLocation.findFirst({
+    where: {
+      id: normalizeText(locationId),
+      userId,
+    },
+  });
+
+  if (!location) {
+    throw new Error('Location not found.');
+  }
+
+  await prisma.favoriteLocation.delete({
+    where: {
+      id: location.id,
+    },
+  });
+}
+
+// --- Notifications ---
+
+async function getNotifications(userId) {
+  return prisma.notification.findMany({
+    where: {userId},
+    orderBy: {createdAt: 'desc'},
+    take: 50,
+  });
+}
+
+async function getUnreadNotificationCount(userId) {
+  return prisma.notification.count({
+    where: {userId, read: false},
+  });
+}
+
+async function markNotificationRead(userId, notificationId) {
+  const notification = await prisma.notification.findFirst({
+    where: {id: notificationId, userId},
+  });
+
+  if (!notification) {
+    throw new Error('Notification not found.');
+  }
+
+  await prisma.notification.update({
+    where: {id: notification.id},
+    data: {read: true},
+  });
+}
+
+async function markAllNotificationsRead(userId) {
+  await prisma.notification.updateMany({
+    where: {userId, read: false},
+    data: {read: true},
+  });
+}
+
+async function createNotification(userId, {title, body}) {
+  return prisma.notification.create({
+    data: {
+      userId,
+      title: normalizeText(title),
+      body: normalizeText(body) || null,
+    },
+  });
+}
+
 module.exports = {
+  addFavoriteLocation,
   cancelSeatRequest,
   createMessage,
   createProfile,
@@ -735,6 +964,17 @@ module.exports = {
   getProfiles,
   getRideById,
   listRides,
+  removeFavoriteLocation,
   updateProfile,
   updateSeatRequest,
+  createDirectMessage,
+  getConversations,
+  getConversationMessages,
+  getUnreadCount,
+  markConversationRead,
+  createNotification,
+  getNotifications,
+  getUnreadNotificationCount,
+  markNotificationRead,
+  markAllNotificationsRead,
 };

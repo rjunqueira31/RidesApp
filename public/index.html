@@ -22,22 +22,40 @@
         <span class="mobile-menu-button-line"></span>
         <span class="mobile-menu-button-line"></span>
       </button>
-      <nav id="landing-guest-actions" class="marketing-actions" data-mobile-menu-desktop-actions>
+      <nav id="landing-guest-actions" class="marketing-actions" data-mobile-menu-desktop-actions hidden>
         <a href="login.html" class="ghost-link">Login</a>
         <a href="signup.html" class="button-link">Signup</a>
       </nav>
       <div id="landing-auth-actions" class="topbar-user" data-mobile-menu-desktop-actions hidden>
         <a href="dashboard.html" class="nav-link">Dashboard</a>
+        <a href="messages.html" class="nav-link nav-link-messages">
+          Messages<span class="nav-unread-badge" hidden></span>
+        </a>
+        <button type="button" class="nav-link nav-link-notifications" data-notifications-toggle>
+          Notifications
+          <span class="nav-notifications-badge" hidden></span>
+        </button>
         <a href="profile.html" class="nav-link">Profile</a>
         <button type="button" class="button-secondary" data-logout-button>Logout</button>
       </div>
+      <button type="button" class="mobile-notifications-bell" data-notifications-toggle aria-label="Notifications">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+        </svg>
+        <span class="nav-notifications-badge" hidden></span>
+      </button>
       <div id="landing-mobile-menu-panel" class="mobile-menu-panel" data-mobile-menu-panel hidden>
-        <nav id="landing-mobile-guest-actions" class="mobile-menu-panel-actions">
+        <nav id="landing-mobile-guest-actions" class="mobile-menu-panel-actions" hidden>
           <a href="login.html" class="ghost-link">Login</a>
           <a href="signup.html" class="button-link">Signup</a>
         </nav>
         <div id="landing-mobile-auth-actions" class="mobile-menu-panel-actions" hidden>
           <a href="dashboard.html" class="nav-link">Dashboard</a>
+          <a href="messages.html" class="nav-link nav-link-messages">
+            Messages<span class="nav-unread-badge" hidden></span>
+          </a>
           <a href="profile.html" class="nav-link">Profile</a>
           <button type="button" class="button-secondary" data-logout-button>Logout</button>
         </div>
@@ -64,13 +82,7 @@
             and chat about pickup details in one place.
           </p>
         </section>
-
         <section class="hero-visual-card">
-          <div class="browser-bar">
-            <span></span>
-            <span></span>
-            <span></span>
-          </div>
           <div class="hero-visual-content">
             <div class="visual-header">
               <div>
@@ -88,7 +100,7 @@
                   <li>Commute together</li>
                 </ul>
               </article>
-              <article class="visual-panel accent-panel">
+              <article class="visual-panel">
                 <h3>Find rides</h3>
                 <p>Porto office - 3 rides available</p>
                 <ul>
@@ -121,6 +133,7 @@
           </div>
         </section>
       </section>
+
       <section class="journey-showcase main-row">
         <div class="journey-showcase-visual">
           <img src="images/RideRoute.png"
@@ -128,7 +141,7 @@
         </div>
         <div class="journey-showcase-copy">
           <span class="eyebrow eyebrow-light">We leave no one behind!</span>
-          <h2 class="landing-section-title-right">From home to office, without the planning mess</h2>
+          <h2 class="journey-showcase-title">From home to office, without the planning mess</h2>
           <p>
             MyRides keeps the route simple: publish where you start and where you
             are going. Everyone else sees the same
@@ -140,49 +153,30 @@
           </p>
         </div>
       </section>
+
+      <section class="journey-showcase journey-showcase-reverse main-row">
+        <div class="journey-showcase-visual">
+          <img src="images/FinalRidePorto.png"
+            alt="Illustration of a car with passengers driving from Lisbon to Porto with pickup stops along the way." />
+        </div>
+        <div class="journey-showcase-copy">
+          <span class="eyebrow eyebrow-light">Go the extra mile</span>
+          <h2 class="journey-showcase-title">Between offices, across cities</h2>
+          <p>
+            Need to travel between company offices? MyRides connects colleagues
+            heading the same way.
+          </p>
+          <p>
+            Pick up teammates along the way, split the journey, and turn a long
+            drive into good company.
+          </p>
+        </div>
+
+      </section>
     </main>
   </div>
 
-  <footer class="footer">
-    <div class="shell shell-wide">
-      <div class="footer-content">
-        <p>This is still in development! If you have any suggestions, feedback or bug findings, add them here <a
-            class="trello-button"
-            href="https://trello.com/invite/b/69d8f138f1f0de58d3ecb752/ATTId6fb85f716576e6e80fb253e34eff532A46F8806/myrides-suggestions-bugs"><b>Trello
-              Board</b></a></p>
-      </div>
-      <!-- <div class="social-media" aria-label="Social media links">
-        <ul>
-          <li class="social-media-icons">
-            <a href="https://www.google.com" aria-label="Myrides on Facebook">
-              <img src="images/icon_facebook.svg" alt="" class="social-media-icon-image" />
-            </a>
-          </li>
-          <li class="social-media-icons">
-            <a href="https://www.google.com" aria-label="Myrides on Instagram">
-              <img src="images/icon_instagram.svg" alt="" class="social-media-icon-image" />
-            </a>
-          </li>
-          <li class="social-media-icons">
-            <a href="https://www.google.com" aria-label="Myrides on LinkedIn">
-              <img src="images/icon_Linkedin.svg" alt="" class="social-media-icon-image" />
-            </a>
-          </li>
-          <li class="social-media-icons">
-            <a href="https://www.google.com" aria-label="Myrides on X">
-              <img src="images/icon_x.svg" alt="" class="social-media-icon-image" />
-            </a>
-          </li>
-        </ul>
-      </div> -->
-      <div class="contact-info">
-        <p></p>
-        <p></p>
-        <p><b>Contact: </b><a href="mailto:myrides.support@gmail.com">myrides.support@gmail.com</a></p>
-      </div>
-    </div>
-  </footer>
-
+  <script src="footer.js"></script>
   <script src="app.js"></script>
 </body>
 

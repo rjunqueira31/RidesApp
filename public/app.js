@@ -1,36 +1,18 @@
 const page = document.body.dataset.page;
 const protectedPages = new Set([
   'dashboard', 'create-ride', 'search-rides', 'my-rides', 'find-users',
-  'profile', 'debug'
+  'profile', 'messages'
 ]);
 
 const state = {
   currentUser: null,
   clientConfig: null,
   clientConfigPromise: null,
-  profiles: [],
-  rides: [],
   filters: {
     driver: '',
     start: '',
     end: '',
     openOnly: false,
-  },
-};
-
-const OFFICE_LOCATIONS = {
-  LISBON: {
-    label: 'Lisbon',
-    address:
-        'Avenida Aquilino Ribeiro Machado 8, 1800-142 Lisboa, Lisboa, Portugal',
-  },
-  PORTO: {
-    label: 'Porto',
-    address: 'Rua Dr. António Luis Gomes 10, 4000-091 Porto',
-  },
-  BRAGA: {
-    label: 'Braga',
-    address: 'Avenida Dom Joao II 374, 4715-275 Braga',
   },
 };
 const DEFAULT_MAPBOX_PROXIMITY = {
@@ -244,6 +226,200 @@ async function loadClientConfig() {
   return state.clientConfigPromise;
 }
 
+function formatDateTime(value) {
+  if (!value) {
+    return '—';
+  }
+
+  return new Intl
+      .DateTimeFormat(undefined, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      })
+      .format(new Date(value));
+}
+
+function formatCalendarDate(value) {
+  return new Intl
+      .DateTimeFormat(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
+      .format(new Date(value));
+}
+
+function formatClockTime(value) {
+  return new Intl
+      .DateTimeFormat(undefined, {
+        hour: 'numeric',
+        minute: '2-digit',
+      })
+      .format(new Date(value));
+}
+
+function getCalendarDayKey(value) {
+  const parts = new Intl
+                    .DateTimeFormat(undefined, {
+                      year: 'numeric',
+                      month: 'numeric',
+                      day: 'numeric',
+                    })
+                    .formatToParts(new Date(value));
+
+  const year = parts.find((part) => part.type === 'year')?.value || '';
+  const month = parts.find((part) => part.type === 'month')?.value || '';
+  const day = parts.find((part) => part.type === 'day')?.value || '';
+
+  return `${year}-${month}-${day}`;
+}
+
+function isSameCalendarDay(leftValue, rightValue) {
+  return getCalendarDayKey(leftValue) === getCalendarDayKey(rightValue);
+}
+
+function isExactDeparture(startValue, endValue) {
+  return startValue && endValue && startValue === endValue;
+}
+
+function formatDateTimeRange(startValue, endValue) {
+  if (!startValue || !endValue) {
+    return startValue ? formatDateTime(startValue) : '—';
+  }
+
+  if (isExactDeparture(startValue, endValue)) {
+    return `${formatCalendarDate(startValue)}, ${formatClockTime(startValue)}`;
+  }
+
+  if (isSameCalendarDay(startValue, endValue)) {
+    return `${formatCalendarDate(startValue)}, ${
+        formatClockTime(startValue)} - ${formatClockTime(endValue)}`;
+  }
+
+  return `${formatDateTime(startValue)}
+${formatDateTime(endValue)}`;
+}
+
+function formatDateForInput(date) {
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 10);
+}
+
+function formatTimeForInput(date) {
+  return `${String(date.getHours()).padStart(2, '0')}:${
+      String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function combineDateAndTime(dateValue, timeValue) {
+  return `${dateValue}T${timeValue}`;
+}
+
+function parseTimeValueToMinutes(timeValue) {
+  const [hours, minutes] =
+      String(timeValue || '').split(':').map((value) => Number(value));
+
+  if ([hours, minutes].some((value) => Number.isNaN(value))) {
+    return null;
+  }
+
+  return hours * 60 + minutes;
+}
+
+function shouldTreatEndTimeAsNextDay(startTime, endTime) {
+  const startMinutes = parseTimeValueToMinutes(startTime);
+  const endMinutes = parseTimeValueToMinutes(endTime);
+
+  if (startMinutes === null || endMinutes === null ||
+      endMinutes > startMinutes) {
+    return false;
+  }
+
+  return startMinutes >= 22 * 60 && startMinutes - endMinutes > 20 * 60;
+}
+
+function floorToMinute(date) {
+  const normalized = new Date(date);
+  normalized.setSeconds(0, 0);
+  return normalized;
+}
+
+function roundUpToNextTenMinutes(date) {
+  const rounded = floorToMinute(date);
+
+  if (date.getSeconds() !== 0 || date.getMilliseconds() !== 0) {
+    rounded.setMinutes(rounded.getMinutes() + 10);
+  }
+
+  return rounded;
+}
+
+function addMinutesToTime(timeValue, minutesToAdd) {
+  const [hours, minutes] =
+      String(timeValue || '').split(':').map((value) => Number(value));
+
+  if ([hours, minutes].some((value) => Number.isNaN(value))) {
+    return '';
+  }
+
+  const totalMinutes = hours * 60 + minutes + minutesToAdd;
+  const normalizedMinutes =
+      ((totalMinutes % (24 * 60)) + (24 * 60)) % (24 * 60);
+  const nextHours = String(Math.floor(normalizedMinutes / 60)).padStart(2, '0');
+  const nextMinutes = String(normalizedMinutes % 60).padStart(2, '0');
+
+  return `${nextHours}:${nextMinutes}`;
+}
+
+function validateRideDateTime(dateValue, startTime, endTime) {
+  const start = new Date(combineDateAndTime(dateValue, startTime));
+  const end = new Date(combineDateAndTime(dateValue, endTime));
+  const now = floorToMinute(new Date());
+  const isSingleDeparture = startTime === endTime;
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    throw new Error('Please choose a valid departure time.');
+  }
+
+  if (!isSingleDeparture && shouldTreatEndTimeAsNextDay(startTime, endTime)) {
+    end.setDate(end.getDate() + 1);
+  }
+
+  if (start.getTime() < now.getTime()) {
+    throw new Error('Departure time must be in the future.');
+  }
+
+  if (!isSingleDeparture && end.getTime() <= start.getTime()) {
+    throw new Error('Latest departure must be later than earliest departure.');
+  }
+
+  return {
+    startWindowStart: start.toISOString(),
+    startWindowEnd: isSingleDeparture ? start.toISOString() : end.toISOString(),
+  };
+}
+
+function syncRideTimeConstraints(dateInput, startTimeInput, endTimeInput) {
+  const now = new Date();
+  const today = formatDateForInput(now);
+  const isToday = dateInput.value === today;
+
+  if (isToday) {
+    const minStartTime = formatTimeForInput(floorToMinute(now));
+
+    if (!startTimeInput.value) {
+      startTimeInput.value = minStartTime;
+    }
+  }
+
+  if (!endTimeInput.closest('[hidden]') && !endTimeInput.value) {
+    endTimeInput.value = addMinutesToTime(startTimeInput.value, 60);
+  }
+}
+
+function redirectTo(path) {
+  window.location.href = path;
+}
 async function fetchMapboxLocationSuggestions(query, signal) {
   const config = await loadClientConfig();
   const token = String(config?.mapboxPublicToken || '').trim();
@@ -358,11 +534,6 @@ function getPrimaryLocationLabel(value) {
     return '';
   }
 
-  const officeLocation = getOfficeLocationByAddress(trimmedValue);
-  if (officeLocation) {
-    return formatOfficeLocation(officeLocation);
-  }
-
   return trimmedValue.split(',')[0].trim() || trimmedValue;
 }
 
@@ -427,7 +598,7 @@ function initializeLocationAutocomplete(input) {
     return;
   }
 
-  const field = input.closest('label');
+  const field = input.closest('label') || input.closest('.route-point-field');
   if (!field || field.querySelector('.location-autocomplete-results')) {
     return;
   }
@@ -540,229 +711,6 @@ function initializeLocationAutocomplete(input) {
     clearResults();
   });
 }
-
-function formatDateTime(value) {
-  if (!value) {
-    return '—';
-  }
-
-  return new Intl
-      .DateTimeFormat(undefined, {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-      })
-      .format(new Date(value));
-}
-
-function formatCalendarDate(value) {
-  return new Intl
-      .DateTimeFormat(undefined, {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      })
-      .format(new Date(value));
-}
-
-function formatClockTime(value) {
-  return new Intl
-      .DateTimeFormat(undefined, {
-        hour: 'numeric',
-        minute: '2-digit',
-      })
-      .format(new Date(value));
-}
-
-function getCalendarDayKey(value) {
-  const parts = new Intl
-                    .DateTimeFormat(undefined, {
-                      year: 'numeric',
-                      month: 'numeric',
-                      day: 'numeric',
-                    })
-                    .formatToParts(new Date(value));
-
-  const year = parts.find((part) => part.type === 'year')?.value || '';
-  const month = parts.find((part) => part.type === 'month')?.value || '';
-  const day = parts.find((part) => part.type === 'day')?.value || '';
-
-  return `${year}-${month}-${day}`;
-}
-
-function isSameCalendarDay(leftValue, rightValue) {
-  return getCalendarDayKey(leftValue) === getCalendarDayKey(rightValue);
-}
-
-function formatDateTimeRange(startValue, endValue) {
-  if (!startValue || !endValue) {
-    return startValue ? formatDateTime(startValue) : '—';
-  }
-
-  if (isSameCalendarDay(startValue, endValue)) {
-    return `${formatCalendarDate(startValue)}, ${
-        formatClockTime(startValue)} - ${formatClockTime(endValue)}`;
-  }
-
-  return `${formatDateTime(startValue)}
-${formatDateTime(endValue)}`;
-}
-
-function formatDateForInput(date) {
-  return new Date(date.getTime() - date.getTimezoneOffset() * 60000)
-      .toISOString()
-      .slice(0, 10);
-}
-
-function formatTimeForInput(date) {
-  return `${String(date.getHours()).padStart(2, '0')}:${
-      String(date.getMinutes()).padStart(2, '0')}`;
-}
-
-function combineDateAndTime(dateValue, timeValue) {
-  return `${dateValue}T${timeValue}`;
-}
-
-function parseTimeValueToMinutes(timeValue) {
-  const [hours, minutes] =
-      String(timeValue || '').split(':').map((value) => Number(value));
-
-  if ([hours, minutes].some((value) => Number.isNaN(value))) {
-    return null;
-  }
-
-  return hours * 60 + minutes;
-}
-
-function shouldTreatEndTimeAsNextDay(startTime, endTime) {
-  const startMinutes = parseTimeValueToMinutes(startTime);
-  const endMinutes = parseTimeValueToMinutes(endTime);
-
-  if (startMinutes === null || endMinutes === null ||
-      endMinutes > startMinutes) {
-    return false;
-  }
-
-  return startMinutes >= 22 * 60 && startMinutes - endMinutes > 20 * 60;
-}
-
-function floorToMinute(date) {
-  const normalized = new Date(date);
-  normalized.setSeconds(0, 0);
-  return normalized;
-}
-
-function roundUpToNextMinute(date) {
-  const rounded = floorToMinute(date);
-
-  if (date.getSeconds() !== 0 || date.getMilliseconds() !== 0) {
-    rounded.setMinutes(rounded.getMinutes() + 1);
-  }
-
-  return rounded;
-}
-
-function addMinutesToTime(timeValue, minutesToAdd) {
-  const [hours, minutes] =
-      String(timeValue || '').split(':').map((value) => Number(value));
-
-  if ([hours, minutes].some((value) => Number.isNaN(value))) {
-    return '';
-  }
-
-  const totalMinutes = hours * 60 + minutes + minutesToAdd;
-  const normalizedMinutes =
-      ((totalMinutes % (24 * 60)) + (24 * 60)) % (24 * 60);
-  const nextHours = String(Math.floor(normalizedMinutes / 60)).padStart(2, '0');
-  const nextMinutes = String(normalizedMinutes % 60).padStart(2, '0');
-
-  return `${nextHours}:${nextMinutes}`;
-}
-
-function validateRideDateTime(dateValue, startTime, endTime) {
-  const start = new Date(combineDateAndTime(dateValue, startTime));
-  const end = new Date(combineDateAndTime(dateValue, endTime));
-  const now = floorToMinute(new Date());
-
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-    throw new Error('Please choose a valid departure window.');
-  }
-
-  if (shouldTreatEndTimeAsNextDay(startTime, endTime)) {
-    end.setDate(end.getDate() + 1);
-  }
-
-  if (start.getTime() < now.getTime()) {
-    throw new Error('Earliest departure must be in the future.');
-  }
-
-  if (end.getTime() <= start.getTime()) {
-    throw new Error('Latest departure must be later than earliest departure.');
-  }
-
-  return {
-    startWindowStart: start.toISOString(),
-    startWindowEnd: end.toISOString(),
-  };
-}
-
-function syncRideTimeConstraints(dateInput, startTimeInput, endTimeInput) {
-  const now = new Date();
-  const today = formatDateForInput(now);
-  const isToday = dateInput.value === today;
-
-  if (isToday) {
-    const minStartTime = formatTimeForInput(floorToMinute(now));
-
-    if (!startTimeInput.value) {
-      startTimeInput.value = minStartTime;
-    }
-  }
-
-  if (!endTimeInput.value) {
-    endTimeInput.value = addMinutesToTime(startTimeInput.value, 60);
-  }
-}
-
-function redirectTo(path) {
-  window.location.href = path;
-}
-
-function ensureNotesModal() {
-  let modal = document.querySelector('#notes-modal');
-  if (modal) {
-    return modal;
-  }
-
-  document.body.insertAdjacentHTML('beforeend', `
-    <div id="notes-modal" class="notes-modal" hidden>
-      <div class="notes-modal-backdrop" data-close-notes-modal="true"></div>
-      <div class="notes-modal-panel" role="dialog" aria-modal="true" aria-labelledby="notes-modal-title">
-        <div class="notes-modal-header">
-          <h2 id="notes-modal-title">Ride notes</h2>
-          <button type="button" class="button-secondary notes-modal-close" data-close-notes-modal="true" aria-label="Close notes">Close</button>
-        </div>
-        <div id="notes-modal-content" class="notes-modal-content"></div>
-      </div>
-    </div>
-  `);
-
-  modal = document.querySelector('#notes-modal');
-  modal.addEventListener('click', (event) => {
-    if (event.target.closest('[data-close-notes-modal="true"]')) {
-      modal.hidden = true;
-    }
-  });
-
-  return modal;
-}
-
-function openNotesModal(notesText) {
-  const modal = ensureNotesModal();
-  const content = modal.querySelector('#notes-modal-content');
-  content.textContent = notesText;
-  modal.hidden = false;
-}
-
 let activeRideDetailsRefresh = null;
 let pendingRidePublish = null;
 
@@ -865,7 +813,7 @@ function ensureRideDetailsModal() {
       return;
     }
 
-    const chatForm = event.target.closest('.chat-form');
+    const chatForm = event.target.closest('.chat-compose');
     if (!chatForm) {
       return;
     }
@@ -886,6 +834,10 @@ function ensureRideDetailsModal() {
         body: JSON.stringify({text}),
       });
       await refreshRideDetailsModal();
+      const chatMsgs = modal.querySelector('.chat-messages');
+      if (chatMsgs) {
+        chatMsgs.scrollTop = chatMsgs.scrollHeight;
+      }
       if (activeRideDetailsRefresh) {
         await activeRideDetailsRefresh();
       }
@@ -902,18 +854,16 @@ function renderRideDetailsContent(ride) {
   const isDriver = state.currentUser && ride.driverId === state.currentUser.id;
   const currentRequest = getCurrentUserRequest(ride);
   const driverName = ride.driver?.name || ride.driverEmail;
-  const notes = String(ride.notes || '').trim() || 'No notes for this ride.';
+  const notes = String(ride.notes || '').trim();
 
   return `
     <div class="ride-details-summary">
-     <div class="ride-details-grid-driver">
-        <strong>Driver:</strong>
-        <div class="ride-details-grid-driver-name">${
-      escapeHtml(driverName)}</div>
-      </div>
       <div class="card-grid ride-details-grid">
         <div class="ride-details-grid-window">
-          <strong>Window</strong>
+          <strong>${
+      isExactDeparture(ride.startWindowStart, ride.startWindowEnd) ?
+          'Departure' :
+          'Window'}</strong>
           <div class="meta">${
       escapeHtml(formatDateTimeRange(
           ride.startWindowStart, ride.startWindowEnd))}</div>
@@ -926,13 +876,12 @@ function renderRideDetailsContent(ride) {
           <strong>Seats left</strong>
           <div class="meta">${ride.seatsLeft} / ${ride.seatsTotal}</div>
         </div>
-        <div class="ride-details-grid-requests">
-          <strong>Requests</strong>
-          <div class="meta">${ride.requests.length}</div>
+        <div class="ride-details-grid-driver">
+          <strong>Driver</strong>
+          <div class="meta">${escapeHtml(driverName)}</div>
         </div>
       </div>
       <div class="pill-row">
-        ${renderRideAvailabilityPill(ride)}
         ${
       currentRequest ?
           `<span class="pill status-${currentRequest.status}">Your request: ${
@@ -944,10 +893,12 @@ function renderRideDetailsContent(ride) {
   })}
     </div>
 
-    <section class="ride-details-section">
+    ${
+      notes ? `<section class="ride-details-section">
       <h3>Notes</h3>
       <div class="ride-details-notes">${escapeHtml(notes)}</div>
-    </section>
+    </section>` :
+              ''}
 
     ${isDriver ? renderDriverRequests(ride) : ''}
     ${renderChat(ride)}
@@ -1103,7 +1054,7 @@ function ensureRidePublishModal() {
       applyUserRouteDefaults(form);
       dateInput.value = formatDateForInput(new Date());
       startTimeInput.value =
-          formatTimeForInput(roundUpToNextMinute(new Date()));
+          formatTimeForInput(roundUpToNextTenMinutes(new Date()));
       endTimeInput.value = addMinutesToTime(startTimeInput.value, 60);
       syncRideTimeConstraints(dateInput, startTimeInput, endTimeInput);
       pendingRidePublish = null;
@@ -1180,7 +1131,7 @@ function openRideCreatedModal(ride) {
 }
 
 function deleteCurrentAccount() {
-  return api('/api/profile', {
+  return api('/api/profiles', {
     method: 'DELETE',
   });
 }
@@ -1242,30 +1193,6 @@ function openDeleteAccountModal() {
   modal.hidden = false;
 }
 
-function formatOfficeLocation(value) {
-  const label = OFFICE_LOCATIONS[value]?.label || '';
-  return label ? `${label} office` : '';
-}
-
-function getOfficeAddress(value) {
-  return OFFICE_LOCATIONS[value]?.address || '';
-}
-
-function getOfficeLocationByAddress(address) {
-  const normalizedAddress = String(address || '').trim().toLowerCase();
-  if (!normalizedAddress) {
-    return '';
-  }
-
-  return Object.entries(OFFICE_LOCATIONS)
-             .find(([, office]) => {
-               return String(office.address || '').trim().toLowerCase() ===
-                   normalizedAddress;
-             })
-             ?.[0] ||
-      '';
-}
-
 function syncSelectPlaceholderState(select) {
   if (!select) {
     return;
@@ -1277,19 +1204,10 @@ function syncSelectPlaceholderState(select) {
 function applyUserRouteDefaults(form) {
   const {hiddenInput: startPointInput} =
       getLocationFieldElements('startPoint', form);
-  const {hiddenInput: endPointInput} =
-      getLocationFieldElements('endPoint', form);
 
   if (startPointInput && !startPointInput.value) {
     setLocationFieldValue(
         'startPoint', state.currentUser.defaultStartingLocation || '', form);
-  }
-
-  if (endPointInput && !endPointInput.value) {
-    setLocationFieldValue(
-        'endPoint', getOfficeAddress(state.currentUser.defaultOffice), form, {
-          displayValue: formatOfficeLocation(state.currentUser.defaultOffice),
-        });
   }
 }
 
@@ -1302,6 +1220,632 @@ function swapLocationFieldValues(
 
   setLocationFieldValue(firstFieldName, secondValue, scope);
   setLocationFieldValue(secondFieldName, firstValue, scope);
+}
+async function fetchUnreadCount() {
+  try {
+    const payload = await api('/api/dm/unread-count');
+    return payload.count;
+  } catch {
+    return 0;
+  }
+}
+
+function updateUnreadBadges(count) {
+  document.querySelectorAll('.nav-unread-badge').forEach((badge) => {
+    if (count > 0) {
+      badge.hidden = false;
+      badge.textContent = count > 99 ? '99+' : String(count);
+    } else {
+      badge.hidden = true;
+      badge.textContent = '';
+    }
+  });
+}
+
+async function refreshUnreadBadges() {
+  if (!state.currentUser) return;
+  const count = await fetchUnreadCount();
+  updateUnreadBadges(count);
+}
+
+// --- Notifications ---
+
+async function fetchNotificationUnreadCount() {
+  try {
+    const payload = await api('/api/notifications/unread-count');
+    return payload.count;
+  } catch {
+    return 0;
+  }
+}
+
+function updateNotificationBadges(count) {
+  document.querySelectorAll('.nav-notifications-badge').forEach((badge) => {
+    if (count > 0) {
+      badge.hidden = false;
+      badge.textContent = count > 99 ? '99+' : String(count);
+    } else {
+      badge.hidden = true;
+      badge.textContent = '';
+    }
+  });
+}
+
+async function refreshNotificationBadges() {
+  if (!state.currentUser) return;
+  const count = await fetchNotificationUnreadCount();
+  updateNotificationBadges(count);
+}
+
+function formatNotificationTime(isoString) {
+  const date = new Date(isoString);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
+}
+
+function createNotificationsDropdown() {
+  const existing = document.querySelector('.notifications-dropdown');
+  if (existing) return existing;
+
+  const dropdown = document.createElement('div');
+  dropdown.className = 'notifications-dropdown';
+  dropdown.innerHTML = `
+    <div class="notifications-dropdown-header">Notifications</div>
+    <ul class="notifications-dropdown-list"></ul>
+    <div class="notifications-dropdown-footer">
+      <button type="button" class="notifications-mark-all-button">Mark all as read</button>
+    </div>
+  `;
+  return dropdown;
+}
+
+function renderNotificationsList(notifications, listElement) {
+  if (!notifications.length) {
+    listElement.innerHTML =
+        '<li class="notifications-dropdown-empty">No notifications</li>';
+    return;
+  }
+
+  listElement.innerHTML =
+      notifications
+          .map(
+              (notification) => `
+    <li class="notification-item ${notification.read ? '' : 'unread'}"
+        data-notification-id="${escapeHtml(notification.id)}">
+      <div class="notification-item-title">${
+                  escapeHtml(notification.title)}</div>
+      ${
+                  notification.body ?
+                      `<div class="notification-item-body">${
+                          escapeHtml(notification.body)}</div>` :
+                      ''}
+      <div class="notification-item-time">${
+                  formatNotificationTime(notification.createdAt)}</div>
+    </li>
+  `).join('');
+}
+
+async function loadAndRenderNotifications(dropdown) {
+  const list = dropdown.querySelector('.notifications-dropdown-list');
+  try {
+    const payload = await api('/api/notifications');
+    renderNotificationsList(payload.notifications, list);
+  } catch {
+    list.innerHTML =
+        '<li class="notifications-dropdown-empty">Failed to load notifications</li>';
+  }
+}
+
+function setupNotificationsDropdown() {
+  const toggleButtons =
+      document.querySelectorAll('[data-notifications-toggle]');
+  if (!toggleButtons.length) return;
+
+  const dropdown = createNotificationsDropdown();
+  document.body.appendChild(dropdown);
+
+  function positionDropdown(anchor) {
+    const rect = anchor.getBoundingClientRect();
+    const dropdownWidth = Math.min(360, window.innerWidth - 32);
+    const buttonCenter = rect.left + rect.width / 2;
+    let right = window.innerWidth - (buttonCenter + dropdownWidth / 2);
+    // Ensure dropdown doesn't overflow the right edge
+    if (right < 16) right = 16;
+    // Ensure dropdown doesn't overflow the left edge
+    if (window.innerWidth - right - dropdownWidth < 16) {
+      right = window.innerWidth - dropdownWidth - 16;
+    }
+    dropdown.style.top = `${rect.bottom + 8}px`;
+    dropdown.style.right = `${right}px`;
+  }
+
+  // Toggle open/close on any notifications button click
+  toggleButtons.forEach((button) => {
+    button.addEventListener('click', async (event) => {
+      event.stopPropagation();
+      const isOpen = dropdown.classList.contains('open');
+
+      if (isOpen) {
+        dropdown.classList.remove('open');
+      } else {
+        positionDropdown(button);
+        dropdown.classList.add('open');
+        await loadAndRenderNotifications(dropdown);
+      }
+    });
+  });
+
+  // Close when clicking outside
+  document.addEventListener('click', (event) => {
+    if (!dropdown.contains(event.target) &&
+        !event.target.closest('[data-notifications-toggle]')) {
+      dropdown.classList.remove('open');
+    }
+  });
+
+  // Mark single notification as read
+  function handleNotificationTap(event) {
+    const item = event.target.closest('.notification-item');
+    if (!item || !item.classList.contains('unread')) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    item.classList.remove('unread');
+    item.style.background = '';
+    // Force synchronous repaint on mobile
+    void item.offsetHeight;
+
+    const notificationId = item.dataset.notificationId;
+    api(`/api/notifications/${notificationId}/read`, {method: 'POST'})
+        .then((payload) => updateNotificationBadges(payload.unreadCount))
+        .catch(() => item.classList.add('unread'));
+  }
+
+  dropdown.addEventListener('click', handleNotificationTap);
+  dropdown.addEventListener('touchend', handleNotificationTap);
+
+  // Mark all as read
+  const markAllButton =
+      dropdown.querySelector('.notifications-mark-all-button');
+  markAllButton.addEventListener('click', async () => {
+    try {
+      const payload = await api('/api/notifications/mark-all-read', {
+        method: 'POST',
+      });
+      updateNotificationBadges(payload.unreadCount);
+      dropdown.querySelectorAll('.notification-item.unread').forEach((item) => {
+        item.classList.remove('unread');
+      });
+    } catch {
+      // silently fail
+    }
+  });
+}
+
+function formatDmTime(isoString) {
+  const date = new Date(isoString);
+  const now = new Date();
+  const isToday = date.toDateString() === now.toDateString();
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const isYesterday = date.toDateString() === yesterday.toDateString();
+
+  if (isToday) {
+    return date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+  }
+  if (isYesterday) {
+    return 'Yesterday';
+  }
+  return date.toLocaleDateString([], {month: 'short', day: 'numeric'});
+}
+
+function renderConversationItem(conversation, activeUserId) {
+  const user = conversation.user;
+  const lastMsg = conversation.lastMessage;
+  const isActive = user.id === activeUserId;
+  const unreadClass =
+      conversation.unreadCount > 0 ? ' dm-conversation-item-unread' : '';
+  const activeClass = isActive ? ' dm-conversation-item-active' : '';
+  const preview = lastMsg ? escapeHtml(lastMsg.text).slice(0, 60) : '';
+  const time = lastMsg ? formatDmTime(lastMsg.createdAt) : '';
+
+  return `
+    <button type="button" class="dm-conversation-item${unreadClass}${
+      activeClass}" data-dm-user-id="${escapeHtml(user.id)}">
+      <img src="images/icon_default_user.svg" alt="" class="dm-avatar" />
+      <div class="dm-conversation-item-body">
+        <div class="dm-conversation-item-header">
+          <strong class="dm-conversation-item-name">${
+      escapeHtml(user.name || 'Unnamed user')}</strong>
+          <span class="dm-conversation-item-time">${time}</span>
+        </div>
+        <div class="dm-conversation-item-preview">${preview}</div>
+      </div>
+      ${
+      conversation.unreadCount > 0 ?
+          `<span class="dm-conversation-item-badge">${
+              conversation.unreadCount > 99 ?
+                  '99+' :
+                  conversation.unreadCount}</span>` :
+          ''}
+    </button>
+  `;
+}
+
+function renderDmMessage(dm, currentUserId) {
+  const isMine = dm.senderId === currentUserId;
+  const sideClass = isMine ? 'dm-bubble-mine' : 'dm-bubble-theirs';
+
+  return `
+    <div class="dm-bubble ${sideClass}">
+      <div class="dm-bubble-text">${escapeHtml(dm.text)}</div>
+      <div class="dm-bubble-time">${formatDmTime(dm.createdAt)}</div>
+    </div>
+  `;
+}
+
+async function setupMessagesPage() {
+  const sidebar = document.querySelector('#dm-sidebar');
+  const conversationList = document.querySelector('#dm-conversation-list');
+  const chatArea = document.querySelector('#dm-chat');
+  let activeConversationUserId = null;
+  let conversations = [];
+
+  // Check URL for ?user=... to open a specific conversation
+  const urlParams = new URLSearchParams(window.location.search);
+  const targetUserId = urlParams.get('user');
+
+  // Connect socket for real-time
+  const socket = typeof io !== 'undefined' ? io() : null;
+
+  // --- User search for starting new chats ---
+  const dmSearchInput = document.querySelector('#dm-search-input');
+  const dmSearchResults = document.querySelector('#dm-search-results');
+  let searchController = null;
+
+  const clearSearchResults = () => {
+    dmSearchResults.innerHTML = '';
+    dmSearchResults.hidden = true;
+  };
+
+  const scheduleUserSearch = debounce(async () => {
+    const query = dmSearchInput.value.trim();
+    if (query.length < 1) {
+      clearSearchResults();
+      return;
+    }
+
+    searchController?.abort();
+    const controller = new AbortController();
+    searchController = controller;
+
+    try {
+      const profiles = await loadProfiles(query, {signal: controller.signal});
+      if (searchController !== controller) return;
+
+      const filtered =
+          (profiles || [])
+              .filter(
+                  (p) => !state.currentUser || p.id !== state.currentUser.id);
+
+      if (!filtered.length) {
+        dmSearchResults.innerHTML =
+            '<div class="dm-search-empty">No users found</div>';
+        dmSearchResults.hidden = false;
+        return;
+      }
+
+      dmSearchResults.innerHTML = filtered
+                                      .map(
+                                          (p) => `
+        <button type="button" class="dm-search-result-item" data-user-id="${
+                                              escapeHtml(p.id)}">
+          <strong>${escapeHtml(p.name || 'Unnamed user')}</strong>
+          <span class="meta">${escapeHtml(p.publicId || p.email || '')}</span>
+        </button>
+      `).join('');
+      dmSearchResults.hidden = false;
+    } catch (error) {
+      if (error.name === 'AbortError') return;
+      clearSearchResults();
+    }
+  }, 300);
+
+  if (dmSearchInput) {
+    dmSearchInput.addEventListener('input', scheduleUserSearch);
+
+    dmSearchResults.addEventListener('click', (event) => {
+      const item = event.target.closest('[data-user-id]');
+      if (!item) return;
+      const userId = item.dataset.userId;
+      dmSearchInput.value = '';
+      clearSearchResults();
+
+      // If conversation already exists, just open it
+      const existingConv = conversations.find((c) => c.userId === userId);
+      if (!existingConv) {
+        // Add a placeholder conversation
+        const name = item.querySelector('strong')?.textContent || 'User';
+        conversations.unshift({
+          userId,
+          user: {id: userId, name},
+          lastMessage: null,
+          unreadCount: 0,
+        });
+        renderConversationList();
+      }
+      openConversation(userId);
+    });
+
+    document.addEventListener('click', (event) => {
+      if (!event.target.closest('#dm-search')) {
+        clearSearchResults();
+      }
+    });
+  }
+
+  function renderConversationList() {
+    if (!conversations.length) {
+      conversationList.innerHTML =
+          '<div class="empty-state">No conversations yet.</div>';
+      return;
+    }
+    conversationList.innerHTML =
+        conversations
+            .map((c) => renderConversationItem(c, activeConversationUserId))
+            .join('');
+  }
+
+  function renderChatView(messages, otherUser) {
+    const messagesHtml = messages.length ?
+        messages.map((m) => renderDmMessage(m, state.currentUser.id)).join('') :
+        '<div class="empty-state">No messages yet. Say hello!</div>';
+
+    chatArea.innerHTML = `
+      <div class="dm-chat-header">
+        <button type="button" class="dm-back-button" id="dm-back-button" aria-label="Back to conversations">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        </button>
+        <div class="dm-chat-header-info">
+          <img src="images/icon_default_user.svg" alt="" class="dm-avatar" />
+          <strong>${escapeHtml(otherUser.name || 'Unnamed user')}</strong>
+          <span class="meta">${escapeHtml(otherUser.publicId || '')}</span>
+        </div>
+      </div>
+      <div class="dm-messages" id="dm-messages">${messagesHtml}</div>
+      <form class="dm-compose" id="dm-compose">
+        <input type="text" name="text" placeholder="Type a message..." autocomplete="off" />
+        <button type="submit" aria-label="Send message">
+          <img src="images/icon_send_message.svg" alt="" width="22" height="22" style="margin-left: 3px" />
+        </button>
+      </form>
+    `;
+
+    const messagesContainer = chatArea.querySelector('#dm-messages');
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    // Wire back button
+    chatArea.querySelector('#dm-back-button').addEventListener('click', () => {
+      activeConversationUserId = null;
+      sidebar.classList.remove('dm-sidebar-hidden');
+      chatArea.classList.remove('dm-chat-active');
+      renderConversationList();
+      // Clean URL
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, '', cleanUrl);
+    });
+
+    // Wire compose form
+    const composeForm = chatArea.querySelector('#dm-compose');
+    const composeInput = composeForm.querySelector('input[name="text"]');
+
+    composeForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const text = composeInput.value.trim();
+      if (!text) return;
+
+      composeInput.value = '';
+
+      try {
+        await api(`/api/dm/conversations/${activeConversationUserId}`, {
+          method: 'POST',
+          body: JSON.stringify({text}),
+        });
+      } catch (error) {
+        showToast(error.message, 'error');
+        composeInput.value = text;
+      }
+    });
+
+    composeInput.addEventListener('focus', async () => {
+      const conv =
+          conversations.find((c) => c.userId === activeConversationUserId);
+      if (conv && conv.unreadCount > 0) {
+        conv.unreadCount = 0;
+        renderConversationList();
+        await api(
+            `/api/dm/conversations/${activeConversationUserId}/read`,
+            {method: 'POST'});
+        refreshUnreadBadges();
+      }
+    });
+
+    composeInput.focus();
+  }
+
+  async function openConversation(userId) {
+    activeConversationUserId = userId;
+    renderConversationList();
+    sidebar.classList.add('dm-sidebar-hidden');
+    chatArea.classList.add('dm-chat-active');
+    chatArea.innerHTML =
+        '<div class="dm-chat-placeholder"><p class="meta">Loading messages...</p></div>';
+
+    try {
+      const payload = await api(`/api/dm/conversations/${userId}`);
+      const conv = conversations.find((c) => c.userId === userId);
+      const otherUser = conv ? conv.user : {id: userId, name: 'User'};
+
+      renderChatView(payload.messages, otherUser);
+
+      // Mark as read
+      if (conv && conv.unreadCount > 0) {
+        conv.unreadCount = 0;
+        renderConversationList();
+        await api(`/api/dm/conversations/${userId}/read`, {method: 'POST'});
+        refreshUnreadBadges();
+      }
+    } catch (error) {
+      chatArea.innerHTML = `<div class="dm-chat-placeholder"><p class="meta">${
+          escapeHtml(error.message)}</p></div>`;
+    }
+  }
+
+  async function loadConversations() {
+    try {
+      const payload = await api('/api/dm/conversations');
+      conversations = payload.conversations;
+      renderConversationList();
+    } catch (error) {
+      conversationList.innerHTML =
+          `<div class="empty-state">${escapeHtml(error.message)}</div>`;
+    }
+  }
+
+  // Click on conversation item
+  conversationList.addEventListener('click', (event) => {
+    const item = event.target.closest('[data-dm-user-id]');
+    if (!item) return;
+    openConversation(item.dataset.dmUserId);
+  });
+
+  // Socket.io real-time incoming messages
+  if (socket) {
+    socket.on('dm:new', (dm) => {
+      const otherUserId =
+          dm.senderId === state.currentUser.id ? dm.receiverId : dm.senderId;
+
+      // Update conversation list
+      const existingConv = conversations.find((c) => c.userId === otherUserId);
+      if (existingConv) {
+        existingConv.lastMessage = dm;
+        if (dm.receiverId === state.currentUser.id &&
+            otherUserId !== activeConversationUserId) {
+          existingConv.unreadCount += 1;
+        }
+        // Move to top
+        conversations =
+            [existingConv, ...conversations.filter((c) => c !== existingConv)];
+      } else {
+        const otherUser =
+            dm.senderId === state.currentUser.id ? dm.receiver : dm.sender;
+        conversations.unshift({
+          userId: otherUserId,
+          user: otherUser,
+          lastMessage: dm,
+          unreadCount: dm.receiverId === state.currentUser.id ? 1 : 0,
+        });
+      }
+      renderConversationList();
+
+      // If this conversation is active, append the message
+      if (otherUserId === activeConversationUserId) {
+        const messagesContainer = chatArea.querySelector('#dm-messages');
+        if (messagesContainer) {
+          // Remove empty state if present
+          const emptyState = messagesContainer.querySelector('.empty-state');
+          if (emptyState) emptyState.remove();
+
+          messagesContainer.insertAdjacentHTML(
+              'beforeend', renderDmMessage(dm, state.currentUser.id));
+          messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+          // Mark as read if received
+          if (dm.receiverId === state.currentUser.id) {
+            const conv = conversations.find((c) => c.userId === otherUserId);
+            if (conv) conv.unreadCount = 0;
+            renderConversationList();
+            api(`/api/dm/conversations/${otherUserId}/read`, {method: 'POST'});
+          }
+        }
+      }
+
+      refreshUnreadBadges();
+    });
+
+    socket.on('dm:read', ({otherUserId}) => {
+      const conv = conversations.find((c) => c.userId === otherUserId);
+      if (conv) {
+        conv.unreadCount = 0;
+        renderConversationList();
+      }
+    });
+  }
+
+  // Initial load
+  await loadConversations();
+
+  // If we have a target user, open or create that conversation
+  if (targetUserId) {
+    const existingConv = conversations.find((c) => c.userId === targetUserId);
+    if (existingConv) {
+      openConversation(targetUserId);
+    } else {
+      // User might not have a conversation yet, try to load their profile
+      try {
+        const profiles = await loadProfiles('', {});
+        const targetUser = (profiles || []).find((p) => p.id === targetUserId);
+        if (targetUser) {
+          conversations.unshift({
+            userId: targetUser.id,
+            user: targetUser,
+            lastMessage: null,
+            unreadCount: 0,
+          });
+          renderConversationList();
+        }
+        openConversation(targetUserId);
+      } catch {
+        openConversation(targetUserId);
+      }
+    }
+  }
+
+  // Poll conversations and active chat every 20 seconds
+  setInterval(async () => {
+    await loadConversations();
+    if (activeConversationUserId) {
+      try {
+        const payload =
+            await api(`/api/dm/conversations/${activeConversationUserId}`);
+        const messagesContainer = chatArea.querySelector('#dm-messages');
+        if (messagesContainer) {
+          const wasAtBottom = messagesContainer.scrollHeight -
+                  messagesContainer.scrollTop - messagesContainer.clientHeight <
+              40;
+          messagesContainer.innerHTML = payload.messages.length ?
+              payload.messages
+                  .map((m) => renderDmMessage(m, state.currentUser.id))
+                  .join('') :
+              '<div class="empty-state">No messages yet. Say hello!</div>';
+          if (wasAtBottom) {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+          }
+        }
+      } catch { /* ignore polling errors */
+      }
+    }
+  }, 20000);
 }
 
 function wireLogout() {
@@ -1508,11 +2052,23 @@ async function loadProfiles(searchQuery = '', options = {}) {
   const payload = await api(
       `/api/profiles${params.toString() ? `?${params.toString()}` : ''}`,
       options);
-  state.profiles = payload.profiles;
   return payload.profiles;
 }
 
 function renderUserSearchCard(profile) {
+  const isSelf = state.currentUser && state.currentUser.id === profile.id;
+  const messageButton = isSelf ?
+      '' :
+      `
+    <a href="messages.html?user=${
+          encodeURIComponent(
+              profile
+                  .id)}" class="dm-user-card-button" aria-label="Send message to ${
+          escapeHtml(profile.name)}" title="Send message">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    </a>
+  `;
+
   return `
     <article class="user-card">
       <div class="user-card-header">
@@ -1521,9 +2077,11 @@ function renderUserSearchCard(profile) {
       escapeHtml(profile.name || 'Unnamed user')} <span class="meta">- ${
       escapeHtml(profile.publicId || '—')}</span></h2>
         </div>
+        ${messageButton}
       </div>
-      <p class="meta"><strong>Default office:</strong> ${
-      escapeHtml(formatOfficeLocation(profile.defaultOffice) || '—')}</p>
+      <p class="meta"><strong>Default start:</strong> ${
+      escapeHtml(
+          getPrimaryLocationLabel(profile.defaultStartingLocation) || '—')}</p>
     </article>
   `;
 }
@@ -1546,7 +2104,6 @@ async function loadRides(filters = {}, options = {}) {
 
   const payload = await api(
       `/api/rides${params.toString() ? `?${params.toString()}` : ''}`, options);
-  state.rides = payload.rides;
   return payload.rides;
 }
 
@@ -1618,8 +2175,8 @@ function renderDriverRequests(ride) {
                       request
                           .passengerEmail)}</strong> <span class="request-divider">-</span> <span class="meta">${
                   escapeHtml(
-                      request
-                          .passengerEmail)}</span> <span class="request-divider">-</span> <span class="pill status-${
+                      request.passenger?.publicId ||
+                      '')}</span> <span class="request-divider">-</span> <span class="pill status-${
                   request.status}">${escapeHtml(request.status)}</span></span>
                     ${
                   request.status === 'pending' ?
@@ -1672,12 +2229,11 @@ function renderChat(ride) {
               .join('') :
           '<li class="empty-state">No messages yet. Use chat to coordinate pickup details.</li>'}
       </ul>
-      <form class="chat-form" data-chat-ride-id="${ride.id}">
-        <label>
-          New message
-          <textarea name="text" rows="2" placeholder="Share pickup details or arrival timing."></textarea>
-        </label>
-        <button type="submit">Send message</button>
+      <form class="chat-compose" data-chat-ride-id="${ride.id}">
+        <input type="text" name="text" placeholder="Share pickup details or arrival timing." autocomplete="off">
+        <button type="submit" aria-label="Send message">
+          <img src="images/icon_send_message.svg" alt="" width="18" height="18">
+        </button>
       </form>
     </section>
   `;
@@ -1697,7 +2253,10 @@ function renderRideCard(ride, options = {}) {
 
       <div class="card-grid">
         <div class="ride-window-field">
-          <strong>Window</strong>
+          <strong>${
+      isExactDeparture(ride.startWindowStart, ride.startWindowEnd) ?
+          'Departure' :
+          'Window'}</strong>
           <div class="meta ride-window-meta">${
       formatDateTimeRange(ride.startWindowStart, ride.startWindowEnd)}</div>
         </div>
@@ -1818,15 +2377,6 @@ function ensureAuthenticated() {
   return true;
 }
 
-function ensureManager() {
-  if (!userIsManager()) {
-    redirectTo('index.html');
-    return false;
-  }
-
-  return true;
-}
-
 async function setupLandingPage() {
   syncLandingPageAuthState();
 
@@ -1855,7 +2405,6 @@ async function setupSignupPage() {
     return;
   }
 
-  const officeSelect = document.querySelector('select[name="defaultOffice"]');
   const passwordInput = document.querySelector('input[name="password"]');
   const {displayInput: defaultStartingLocationInput} =
       getLocationFieldElements('defaultStartingLocation');
@@ -1863,10 +2412,6 @@ async function setupSignupPage() {
     defaultStartingLocationInput.dataset.locationField =
         'defaultStartingLocation';
   }
-  syncSelectPlaceholderState(officeSelect);
-  officeSelect?.addEventListener('change', () => {
-    syncSelectPlaceholderState(officeSelect);
-  });
   initializeLocationAutocomplete(defaultStartingLocationInput);
   await setupLocationMapTriggers();
 
@@ -1939,17 +2484,7 @@ async function setupLoginPage() {
 }
 
 async function setupDashboardPage() {
-  const hubGrid = document.querySelector('.hub-grid');
-
-  if (hubGrid && userIsManager()) {
-    hubGrid.insertAdjacentHTML('beforeend', `
-          <a href="debug.html" class="hub-card">
-            <span class="hub-label">05</span>
-            <h2>Debug data</h2>
-            <p>Inspect all users, rides, requests, and ride chat data.</p>
-          </a>
-        `);
-  }
+  // Dashboard page initialization
 }
 
 function ensureLocationMapModal() {
@@ -2382,25 +2917,50 @@ async function setupCreateRidePage() {
       getLocationFieldElements('startPoint', form);
   const {displayInput: endPointInput} =
       getLocationFieldElements('endPoint', form);
-  const officePickerButton =
-      document.querySelector('#toggle-office-picker-button');
-  const officePickerPanel = document.querySelector('#office-picker-panel');
-  const closeOfficePickerButton =
-      document.querySelector('#close-office-picker-button');
-  const officePickerOptions = officePickerPanel ?
-      Array.from(officePickerPanel.querySelectorAll('[data-office-location]')) :
-      [];
+  const locationPickerTriggers =
+      form.querySelectorAll('.location-picker-trigger');
+  const locationPickerPanels = form.querySelectorAll('.location-picker-panel');
   const dateInput = form.querySelector('input[name="rideDate"]');
   const startTimeInput = form.querySelector('input[name="startTime"]');
   const endTimeInput = form.querySelector('input[name="endTime"]');
+  const endTimeLabel = document.querySelector('#end-time-label');
+  const startTimeLabelText = document.querySelector('#start-time-label-text');
+  const timeWindowToggle = document.querySelector('#toggle-time-window');
+  const timeWindowOptions =
+      timeWindowToggle.querySelectorAll('.time-mode-option');
   const swapRouteButton = document.querySelector('#swap-route-button');
+  let useTimeWindow = false;
   const today = new Date();
-  const nextMinute = roundUpToNextMinute(today);
+  const nextMinute = roundUpToNextTenMinutes(today);
 
   dateInput.min = formatDateForInput(today);
   dateInput.value = formatDateForInput(today);
   startTimeInput.value = formatTimeForInput(nextMinute);
-  endTimeInput.value = addMinutesToTime(startTimeInput.value, 60);
+
+  timeWindowOptions.forEach((option) => {
+    option.addEventListener('click', () => {
+      const mode = option.dataset.timeMode;
+      useTimeWindow = mode === 'window';
+
+      timeWindowOptions.forEach(
+          (opt) => opt.classList.toggle(
+              'time-mode-option-active', opt.dataset.timeMode === mode));
+
+      endTimeLabel.hidden = !useTimeWindow;
+      startTimeLabelText.textContent =
+          useTimeWindow ? 'Earliest departure' : 'Departure time';
+
+      if (useTimeWindow) {
+        endTimeInput.required = true;
+        if (!endTimeInput.value) {
+          endTimeInput.value = addMinutesToTime(startTimeInput.value, 60);
+        }
+      } else {
+        endTimeInput.required = false;
+        endTimeInput.value = '';
+      }
+    });
+  });
 
   if (!carInput.value) {
     carInput.value = state.currentUser.defaultCar || '';
@@ -2419,96 +2979,110 @@ async function setupCreateRidePage() {
   initializeLocationAutocomplete(endPointInput);
   await setupLocationMapTriggers();
 
-  const closeOfficePicker = () => {
-    if (!officePickerButton || !officePickerPanel) {
+  const closeAllLocationPickers = () => {
+    locationPickerPanels.forEach((panel) => {
+      panel.hidden = true;
+    });
+    locationPickerTriggers.forEach((trigger) => {
+      trigger.setAttribute('aria-expanded', 'false');
+    });
+  };
+
+  const renderLocationPickerOptions = () => {
+    locationPickerPanels.forEach((panel) => {
+      const listContainer = panel.querySelector('.location-picker-list');
+      if (!listContainer) {
+        return;
+      }
+
+      const locations = state.currentUser?.favoriteLocations || [];
+      if (!locations.length) {
+        listContainer.innerHTML =
+            '<p class="location-picker-empty">No saved locations yet. Add them from your <a href="profile.html">profile</a>.</p>';
+        return;
+      }
+
+      listContainer.innerHTML =
+          locations
+              .map((location) => {
+                const displayLabel =
+                    location.label || getPrimaryLocationLabel(location.address);
+                const meta = location.label ?
+                    getPrimaryLocationLabel(location.address) :
+                    '';
+                return `
+          <button type="button" class="location-picker-option"
+              data-location-address="${escapeHtml(location.address)}">
+            <span class="location-picker-option-title">${
+                    escapeHtml(displayLabel)}</span>
+            ${
+                    meta ? `<span class="location-picker-option-meta">${
+                               escapeHtml(meta)}</span>` :
+                           ''}
+          </button>`;
+              })
+              .join('');
+    });
+  };
+
+  renderLocationPickerOptions();
+
+  locationPickerTriggers.forEach((trigger) => {
+    trigger.addEventListener('click', () => {
+      const targetField = trigger.dataset.pickerTarget;
+      const panel = form.querySelector(`[data-picker-panel="${targetField}"]`);
+      if (!panel) {
+        return;
+      }
+
+      const isOpen = !panel.hidden;
+      closeAllLocationPickers();
+
+      if (!isOpen) {
+        panel.hidden = false;
+        trigger.setAttribute('aria-expanded', 'true');
+      }
+    });
+  });
+
+  locationPickerPanels.forEach((panel) => {
+    const targetField = panel.dataset.pickerPanel;
+
+    panel.addEventListener('click', (event) => {
+      const option = event.target.closest('[data-location-address]');
+      if (option) {
+        setLocationFieldValue(
+            targetField, option.dataset.locationAddress, form);
+        closeAllLocationPickers();
+        return;
+      }
+
+      if (event.target.closest('.location-picker-close')) {
+        closeAllLocationPickers();
+      }
+    });
+  });
+
+  document.addEventListener('click', (event) => {
+    if (event.target.closest('.location-picker-panel') ||
+        event.target.closest('.location-picker-trigger')) {
       return;
     }
 
-    officePickerPanel.hidden = true;
-    officePickerButton.setAttribute('aria-expanded', 'false');
-  };
+    closeAllLocationPickers();
+  });
 
-  const openOfficePicker = () => {
-    if (!officePickerButton || !officePickerPanel) {
-      return;
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeAllLocationPickers();
     }
-
-    officePickerPanel.hidden = false;
-    officePickerButton.setAttribute('aria-expanded', 'true');
-  };
-
-  const syncOfficePickerSelection = () => {
-    const {hiddenInput} = getLocationFieldElements('endPoint', form);
-    const selectedOffice = getOfficeLocationByAddress(hiddenInput?.value || '');
-
-    officePickerOptions.forEach((option) => {
-      const isActive = option.dataset.officeLocation === selectedOffice;
-      option.classList.toggle('office-picker-option-active', isActive);
-      option.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-    });
-  };
-
-  const applyOfficeSelection = (officeLocation) => {
-    setLocationFieldValue('endPoint', getOfficeAddress(officeLocation), form, {
-      displayValue: formatOfficeLocation(officeLocation),
-    });
-    syncOfficePickerSelection();
-  };
-
-  if (officePickerButton && officePickerPanel) {
-    syncOfficePickerSelection();
-
-    officePickerButton.addEventListener('click', () => {
-      if (officePickerPanel.hidden) {
-        openOfficePicker();
-        return;
-      }
-
-      closeOfficePicker();
-    });
-
-    officePickerOptions.forEach((option) => {
-      option.addEventListener('click', () => {
-        applyOfficeSelection(option.dataset.officeLocation || '');
-        closeOfficePicker();
-        endPointInput?.focus();
-      });
-    });
-
-    closeOfficePickerButton?.addEventListener('click', () => {
-      closeOfficePicker();
-      officePickerButton.focus();
-    });
-
-    document.addEventListener('click', (event) => {
-      if (officePickerPanel.hidden) {
-        return;
-      }
-
-      if (event.target.closest('#office-picker-panel') ||
-          event.target.closest('#toggle-office-picker-button')) {
-        return;
-      }
-
-      closeOfficePicker();
-    });
-
-    document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && !officePickerPanel.hidden) {
-        closeOfficePicker();
-      }
-    });
-
-    endPointInput?.addEventListener('input', syncOfficePickerSelection);
-    endPointInput?.addEventListener('change', syncOfficePickerSelection);
-  }
+  });
 
   syncRideTimeConstraints(dateInput, startTimeInput, endTimeInput);
 
   if (swapRouteButton) {
     swapRouteButton.addEventListener('click', () => {
       swapLocationFieldValues('startPoint', 'endPoint', form);
-      syncOfficePickerSelection();
     });
   }
 
@@ -2524,10 +3098,11 @@ async function setupCreateRidePage() {
     event.preventDefault();
     const formData = new FormData(form);
     const ride = Object.fromEntries(formData.entries());
+    const effectiveEndTime = useTimeWindow ? ride.endTime : ride.startTime;
 
     try {
       const {startWindowStart, startWindowEnd} =
-          validateRideDateTime(ride.rideDate, ride.startTime, ride.endTime);
+          validateRideDateTime(ride.rideDate, ride.startTime, effectiveEndTime);
 
       ride.startWindowStart = startWindowStart;
       ride.startWindowEnd = startWindowEnd;
@@ -2678,266 +3253,128 @@ async function setupMyRidesPage() {
   await handleRideActions(passengerContainer, refresh);
 }
 
-function renderDebugSummary(profiles, rides) {
-  const requestCount =
-      rides.reduce((total, ride) => total + ride.requests.length, 0);
-  const messageCount =
-      rides.reduce((total, ride) => total + ride.messages.length, 0);
+async function setupFavoriteLocations() {
+  const container = document.querySelector('#favorite-locations-section');
+  if (!container) {
+    return;
+  }
 
-  return `
-    <div class="debug-summary-grid">
-      <article class="debug-stat-card">
-        <strong>${profiles.length}</strong>
-        <span>Profiles</span>
-      </article>
-      <article class="debug-stat-card">
-        <strong>${rides.length}</strong>
-        <span>Rides</span>
-      </article>
-      <article class="debug-stat-card">
-        <strong>${requestCount}</strong>
-        <span>Seat requests</span>
-      </article>
-      <article class="debug-stat-card">
-        <strong>${messageCount}</strong>
-        <span>Messages</span>
-      </article>
-    </div>
-  `;
-}
+  const list = container.querySelector('#favorite-locations-list');
+  const addForm = container.querySelector('#add-favorite-location-form');
+  const feedback = container.querySelector('#favorite-locations-feedback');
+  const toggleAddButton =
+      container.querySelector('#toggle-add-location-button');
 
-function renderDebugUser(profile, rides) {
-  const email = profile.email.toLowerCase();
-  const drivingRides =
-      rides.filter((ride) => ride.driverEmail.toLowerCase() === email);
-  const passengerRides = rides.filter(
-      (ride) => ride.requests.some(
-          (request) => request.passengerEmail.toLowerCase() === email));
+  if (toggleAddButton && addForm) {
+    toggleAddButton.addEventListener('click', () => {
+      addForm.hidden = !addForm.hidden;
+      if (!addForm.hidden) {
+        addForm.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+      }
+    });
+  }
 
-  return `
-    <article class="debug-card">
-      <div class="debug-card-header">
-        <div>
-          <h3>${escapeHtml(profile.name || 'Unnamed user')}</h3>
-          <p class="meta">${escapeHtml(profile.email)}</p>
-        </div>
-        <div class="pill-row">
-          <span class="pill">Driving: ${drivingRides.length}</span>
-          <span class="pill">Passenger: ${passengerRides.length}</span>
-        </div>
-      </div>
+  const renderList = () => {
+    const locations = state.currentUser?.favoriteLocations || [];
+    if (!locations.length) {
+      list.innerHTML = '<p class="empty-state">No saved locations yet.</p>';
+      return;
+    }
 
-      <div class="debug-meta-grid">
-        <div>
-          <strong>Phone</strong>
-          <div class="meta">${escapeHtml(profile.phone || '—')}</div>
-        </div>
-        <div>
-          <strong>Default car</strong>
-          <div class="meta">${escapeHtml(profile.defaultCar || '—')}</div>
-        </div>
-        <div>
-          <strong>Default office</strong>
-          <div class="meta">${
-      escapeHtml(formatOfficeLocation(profile.defaultOffice) || '—')}</div>
-        </div>
-        <div>
-          <strong>Default starting location</strong>
-          <div class="meta">${
-      escapeHtml(profile.defaultStartingLocation || '—')}</div>
-        </div>
-        <div>
-          <strong>Created</strong>
-          <div class="meta">${formatDateTime(profile.createdAt)}</div>
-        </div>
-      </div>
-
-      <div class="debug-section-grid">
-        <section class="debug-subsection">
-          <h4>Rides as driver</h4>
-          ${
-      drivingRides.length ?
-          `
-            <ul class="debug-list">
-              ${
-              drivingRides
-                  .map(
-                      (ride) => `
-                  <li>
-                    <strong>${escapeHtml(formatRideRouteLabel(ride))}</strong>
-                    <span class="meta">${
-                          formatDateTimeRange(
-                              ride.startWindowStart,
-                              ride.startWindowEnd,
-                              )} · Seats ${ride.seatsLeft}/${
-                          ride.seatsTotal}</span>
-                  </li>
-                `).join('')}
-            </ul>
-          ` :
-          '<div class="empty-state">No rides created by this user.</div>'}
-        </section>
-
-        <section class="debug-subsection">
-          <h4>Rides as passenger</h4>
-          ${
-      passengerRides.length ?
-          `
-            <ul class="debug-list">
-              ${
-              passengerRides
-                  .map((ride) => {
-                    const request = ride.requests.find(
-                        (item) => item.passengerEmail.toLowerCase() === email);
-
-                    return `
-                  <li>
-                    <strong>${escapeHtml(formatRideRouteLabel(ride))}</strong>
-                    <span class="meta">Driver: ${
-                        escapeHtml(
-                            ride.driver?.name || ride.driverEmail)}</span>
-                    <span class="pill status-${
-                        escapeHtml(request?.status || 'pending')}">${
-                        escapeHtml(request?.status || 'pending')}</span>
-                  </li>
-                `;
-                  })
-                  .join('')}
-            </ul>
-          ` :
-          '<div class="empty-state">No passenger ride activity for this user.</div>'}
-        </section>
-      </div>
-    </article>
-  `;
-}
-
-function renderDebugRide(ride) {
-  return `
-    <article class="debug-card">
-      <div class="debug-card-header">
-        <div>
-          <h3>${escapeHtml(formatRideRouteLabel(ride))}</h3>
-          <p class="meta">Ride ID: ${escapeHtml(ride.id)}</p>
-        </div>
-        <div class="pill-row">
-          <span class="pill">Seats ${ride.seatsLeft}/${ride.seatsTotal}</span>
-          <span class="pill">Requests ${ride.requests.length}</span>
-          <span class="pill">Messages ${ride.messages.length}</span>
-        </div>
-      </div>
-
-      <div class="debug-meta-grid">
-        <div>
-          <strong>Driver</strong>
-          <div class="meta">${
-      escapeHtml(ride.driver?.name || ride.driverEmail)}</div>
-        </div>
-        <div>
-          <strong>Driver email</strong>
-          <div class="meta">${escapeHtml(ride.driverEmail)}</div>
-        </div>
-        <div>
-          <strong>Window</strong>
-          <div class="meta">${
-      formatDateTimeRange(ride.startWindowStart, ride.startWindowEnd)}</div>
-        </div>
-        <div>
-          <strong>Car</strong>
-          <div class="meta">${escapeHtml(ride.car || '—')}</div>
-        </div>
-      </div>
-
-      <section class="debug-subsection">
-        <h4>Notes</h4>
-        <div class="meta">${
-      escapeHtml(ride.notes || 'No notes for this ride.')}</div>
-      </section>
-
-      <div class="debug-section-grid">
-        <section class="debug-subsection">
-          <h4>Seat requests</h4>
-          ${
-      ride.requests.length ?
-          `
-            <ul class="debug-list">
-              ${
-              ride.requests
-                  .map(
-                      (request) => `
-                  <li>
-                    <strong>${
-                          escapeHtml(
-                              request.passenger?.name ||
-                              request.passengerEmail)}</strong>
-                    <span class="meta">${
-                          escapeHtml(request.passengerEmail)} · ${
-                          escapeHtml(request.message || 'No message')}</span>
-                    <span class="pill status-${escapeHtml(request.status)}">${
-                          escapeHtml(request.status)}</span>
-                  </li>
-                `).join('')}
-            </ul>
-          ` :
-          '<div class="empty-state">No seat requests yet.</div>'}
-        </section>
-
-        <section class="debug-subsection">
-          <h4>Messages</h4>
-          ${
-      ride.messages.length ?
-          `
-            <ul class="debug-list">
-              ${
-              ride.messages
-                  .map(
-                      (message) => `
-                  <li>
-                    <strong>${
-                          escapeHtml(
-                              message.sender?.name ||
-                              message.senderEmail)}</strong>
-                    <span class="meta">${
-                          formatDateTime(message.createdAt)}</span>
-                    <span>${escapeHtml(message.text)}</span>
-                  </li>
-                `).join('')}
-            </ul>
-          ` :
-          '<div class="empty-state">No chat messages yet.</div>'}
-        </section>
-      </div>
-    </article>
-  `;
-}
-
-async function setupDebugPage() {
-  const summary = document.querySelector('#debug-summary');
-  const usersContainer = document.querySelector('#debug-users-list');
-  const ridesContainer = document.querySelector('#debug-rides-list');
-  const refreshButton = document.querySelector('#debug-refresh');
-
-  const refresh = async () => {
-    const payload = await api('/api/admin/overview');
-    const {profiles, rides} = payload;
-
-    summary.innerHTML = renderDebugSummary(profiles, rides);
-    usersContainer.innerHTML = profiles.length ?
-        profiles.map((profile) => renderDebugUser(profile, rides)).join('') :
-        '<div class="empty-state">No users found in the database.</div>';
-    ridesContainer.innerHTML = rides.length ?
-        rides.map((ride) => renderDebugRide(ride)).join('') :
-        '<div class="empty-state">No rides found in the database.</div>';
+    list.innerHTML = locations
+                         .map((location) => {
+                           const displayLabel = location.label ||
+                               getPrimaryLocationLabel(location.address);
+                           const meta = location.label ?
+                               getPrimaryLocationLabel(location.address) :
+                               '';
+                           return `
+        <div class="favorite-location-item">
+          <div class="favorite-location-info">
+            <span class="favorite-location-label">${
+                               escapeHtml(displayLabel)}</span>
+            ${
+                               meta ? `<span class="favorite-location-meta">${
+                                          escapeHtml(meta)}</span>` :
+                                      ''}
+          </div>
+          <button type="button" class="button-secondary favorite-location-remove"
+              data-location-id="${escapeHtml(location.id)}"
+              aria-label="Remove ${escapeHtml(displayLabel)}">
+            ×
+          </button>
+        </div>`;
+                         })
+                         .join('');
   };
 
-  await refresh();
+  renderList();
 
-  if (refreshButton) {
-    refreshButton.addEventListener('click', async () => {
+  list.addEventListener('click', async (event) => {
+    const removeButton = event.target.closest('[data-location-id]');
+    if (!removeButton) {
+      return;
+    }
+
+    const locationId = removeButton.dataset.locationId;
+    try {
+      await api(`/api/profiles/locations/${encodeURIComponent(locationId)}`, {
+        method: 'DELETE',
+      });
+
+      state.currentUser.favoriteLocations =
+          (state.currentUser.favoriteLocations ||
+           []).filter((loc) => loc.id !== locationId);
+      renderList();
+    } catch (error) {
+      if (feedback) {
+        feedback.textContent = error.message;
+        feedback.classList.add('feedback-error');
+      }
+    }
+  });
+
+  if (addForm) {
+    const addressInput = addForm.querySelector('input[name="locationAddress"]');
+    const {displayInput: addressDisplayInput} =
+        getLocationFieldElements('locationAddress', addForm);
+    if (addressDisplayInput) {
+      addressDisplayInput.dataset.locationField = 'locationAddress';
+    }
+    initializeLocationAutocomplete(addressDisplayInput);
+
+    addForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const formData = new FormData(addForm);
+      const label = String(formData.get('locationLabel') || '').trim();
+      const address =
+          String(addressInput?.value || formData.get('locationAddress') || '')
+              .trim();
+
+      if (!address) {
+        return;
+      }
+
       try {
-        await refresh();
+        const payload = await api('/api/profiles/locations', {
+          method: 'POST',
+          body: JSON.stringify({label, address}),
+        });
+
+        state.currentUser.favoriteLocations =
+            [...(state.currentUser.favoriteLocations || []), payload.location];
+        renderList();
+        addForm.reset();
+        addForm.hidden = true;
+        if (feedback) {
+          feedback.textContent = '';
+          feedback.classList.remove('feedback-error');
+        }
       } catch (error) {
-        setFeedback(error.message, true);
+        if (feedback) {
+          feedback.textContent = error.message;
+          feedback.classList.add('feedback-error');
+        }
       }
     });
   }
@@ -2946,13 +3383,29 @@ async function setupDebugPage() {
 async function setupProfilePage() {
   const form = document.querySelector('#profile-update-form');
   const deleteAccountButton = document.querySelector('#delete-account-button');
+
+  // Tab switching
+  const tabs = document.querySelectorAll('[data-profile-tab]');
+  const panels = document.querySelectorAll('[data-profile-panel]');
+  tabs.forEach((tab) => {
+    tab.addEventListener('click', () => {
+      tabs.forEach((t) => t.classList.remove('profile-tab-active'));
+      panels.forEach((p) => p.hidden = true);
+      tab.classList.add('profile-tab-active');
+      const panel = document.querySelector(
+          `[data-profile-panel="${tab.dataset.profileTab}"]`);
+      if (panel) {
+        panel.hidden = false;
+      }
+    });
+  });
+
   const {displayInput: defaultStartingLocationInput} =
       getLocationFieldElements('defaultStartingLocation', form);
   form.elements.name.value = state.currentUser.name || '';
   form.elements.email.value = state.currentUser.email || '';
   form.elements.phone.value = state.currentUser.phone || '';
   form.elements.defaultCar.value = state.currentUser.defaultCar || '';
-  form.elements.defaultOffice.value = state.currentUser.defaultOffice || '';
   if (defaultStartingLocationInput) {
     defaultStartingLocationInput.dataset.locationField =
         'defaultStartingLocation';
@@ -2962,18 +3415,29 @@ async function setupProfilePage() {
       state.currentUser.defaultStartingLocation || '', form);
   initializeLocationAutocomplete(defaultStartingLocationInput);
 
-  syncSelectPlaceholderState(form.elements.defaultOffice);
-  form.elements.defaultOffice.addEventListener('change', () => {
-    syncSelectPlaceholderState(form.elements.defaultOffice);
-  });
-
   await setupLocationMapTriggers();
+  await setupFavoriteLocations();
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     const currentEmail = state.currentUser.email;
     const formData = new FormData(form);
     const profile = Object.fromEntries(formData.entries());
+
+    const fieldsToCompare = [
+      'name',
+      'email',
+      'phone',
+      'defaultCar',
+      'defaultStartingLocation',
+    ];
+    const hasChanges = fieldsToCompare.some(
+        (field) => (profile[field] || '') !== (state.currentUser[field] || ''));
+
+    if (!hasChanges) {
+      redirectTo(consumeReturnPath(PROFILE_RETURN_PATH_KEY, 'dashboard.html'));
+      return;
+    }
 
     try {
       const payload =
@@ -3000,10 +3464,6 @@ async function init() {
   setupMobileMenus();
 
   if (protectedPages.has(page) && !ensureAuthenticated()) {
-    return;
-  }
-
-  if (page === 'debug' && !ensureManager()) {
     return;
   }
 
@@ -3035,14 +3495,24 @@ async function init() {
     case 'find-users':
       await setupFindUsersPage();
       break;
-    case 'debug':
-      await setupDebugPage();
+    case 'messages':
+      await setupMessagesPage();
       break;
     case 'profile':
       await setupProfilePage();
       break;
     default:
       break;
+  }
+
+  // Poll unread badge count periodically for all authenticated pages
+  if (state.currentUser) {
+    refreshUnreadBadges();
+    setInterval(refreshUnreadBadges, 20000);
+
+    setupNotificationsDropdown();
+    refreshNotificationBadges();
+    setInterval(refreshNotificationBadges, 20000);
   }
 }
 

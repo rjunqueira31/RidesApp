@@ -25,12 +25,32 @@
       </button>
       <div class="topbar-user" data-mobile-menu-desktop-actions>
         <a href="dashboard.html" class="nav-link">Dashboard</a>
+        <a href="messages.html" class="nav-link nav-link-messages">
+          Messages
+          <span class="nav-unread-badge" hidden></span>
+        </a>
+        <button type="button" class="nav-link nav-link-notifications" data-notifications-toggle>
+          Notifications
+          <span class="nav-notifications-badge" hidden></span>
+        </button>
         <a href="profile.html" class="nav-link">Profile</a>
         <button type="button" id="logout-button" class="button-secondary">Logout</button>
       </div>
+      <button type="button" class="mobile-notifications-bell" data-notifications-toggle aria-label="Notifications">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+        </svg>
+        <span class="nav-notifications-badge" hidden></span>
+      </button>
       <div id="create-ride-mobile-menu-panel" class="mobile-menu-panel" data-mobile-menu-panel hidden>
         <div class="mobile-menu-panel-actions">
           <a href="dashboard.html" class="nav-link">Dashboard</a>
+          <a href="messages.html" class="nav-link nav-link-messages">
+            Messages
+            <span class="nav-unread-badge" hidden></span>
+          </a>
           <a href="profile.html" class="nav-link">Profile</a>
           <button type="button" class="button-secondary" data-logout-button>Logout</button>
         </div>
@@ -39,15 +59,30 @@
 
     <main class="page-grid single-column">
       <section class="panel-card">
-        <span class="eyebrow">Driver action</span>
+        <span class="eyebrow">Driver</span>
         <h1>Create a ride</h1>
         <p class="section-copy">Publish a ride for colleagues to find and request.</p>
         <div id="page-feedback" class="feedback" aria-live="polite"></div>
 
         <form id="ride-form" class="stack-form two-column-form">
           <div class="route-fields full-width">
-            <label>
-              Start point <span class="label-required" aria-hidden="true">*</span>
+            <div class="route-point-field">
+              <span class="field-label-row">
+                <span>Start point <span class="label-required" aria-hidden="true">*</span></span>
+                <button type="button" class="field-inline-action location-picker-trigger" aria-expanded="false"
+                  data-picker-target="startPoint">
+                  Saved locations
+                </button>
+              </span>
+              <div class="location-picker-panel" data-picker-panel="startPoint" hidden>
+                <div class="location-picker-header">
+                  <strong>Saved locations</strong>
+                  <button type="button" class="location-picker-close" aria-label="Close saved locations">
+                    ×
+                  </button>
+                </div>
+                <div class="location-picker-list"></div>
+              </div>
               <div class="location-field-row">
                 <input type="text" name="startPointDisplay" placeholder="Sintra" autocomplete="off" required />
                 <input type="hidden" name="startPoint" />
@@ -56,39 +91,27 @@
                   <img src="images/icon_map.svg" alt="" />
                 </button>
               </div>
-            </label>
+            </div>
             <button type="button" id="swap-route-button" class="button-secondary route-swap-button"
               aria-label="Swap start and end points" title="Swap start and end points">
               <span aria-hidden="true">⇄</span>
             </button>
-            <label class="endpoint-label">
+            <div class="route-point-field">
               <span class="field-label-row">
                 <span>End point <span class="label-required" aria-hidden="true">*</span></span>
-                <button type="button" id="toggle-office-picker-button" class="field-inline-action" aria-expanded="false"
-                  aria-controls="office-picker-panel">
-                  See all offices
+                <button type="button" class="field-inline-action location-picker-trigger" aria-expanded="false"
+                  data-picker-target="endPoint">
+                  Saved locations
                 </button>
               </span>
-              <div id="office-picker-panel" class="office-picker-panel" hidden>
-                <div class="office-picker-header">
-                  <strong>Choose office</strong>
-                  <button type="button" id="close-office-picker-button" class="office-picker-close"
-                    aria-label="Close office list">
+              <div class="location-picker-panel" data-picker-panel="endPoint" hidden>
+                <div class="location-picker-header">
+                  <strong>Saved locations</strong>
+                  <button type="button" class="location-picker-close" aria-label="Close saved locations">
                     ×
                   </button>
                 </div>
-                <button type="button" class="office-picker-option" data-office-location="LISBON">
-                  <span class="office-picker-option-title">Lisbon office</span>
-                  <span class="office-picker-option-meta">Avenida Aquilino Ribeiro Machado 8</span>
-                </button>
-                <button type="button" class="office-picker-option" data-office-location="PORTO">
-                  <span class="office-picker-option-title">Porto office</span>
-                  <span class="office-picker-option-meta">Rua Dr. António Luis Gomes 10</span>
-                </button>
-                <button type="button" class="office-picker-option" data-office-location="BRAGA">
-                  <span class="office-picker-option-title">Braga office</span>
-                  <span class="office-picker-option-meta">Avenida Dom Joao II 374</span>
-                </button>
+                <div class="location-picker-list"></div>
               </div>
               <div class="location-field-row">
                 <input type="text" name="endPointDisplay" placeholder="Lisbon Office" autocomplete="off" required />
@@ -98,21 +121,29 @@
                   <img src="images/icon_map.svg" alt="" />
                 </button>
               </div>
-            </label>
+            </div>
           </div>
           <div class="schedule-fields full-width">
-            <label>
-              Ride date <span class="label-required" aria-hidden="true">*</span>
-              <input type="date" name="rideDate" required />
-            </label>
-            <div class="schedule-time-fields">
+            <div class="schedule-date-row">
               <label>
-                Earliest departure <span class="label-required" aria-hidden="true">*</span>
+                Ride date <span class="label-required" aria-hidden="true">*</span>
+                <input type="date" name="rideDate" required />
+              </label>
+              <div class="time-mode-toggle" id="toggle-time-window">
+                <button type="button" class="time-mode-option time-mode-option-active" data-time-mode="exact">Exact
+                  time</button>
+                <button type="button" class="time-mode-option" data-time-mode="window">Time window</button>
+              </div>
+            </div>
+            <div class="schedule-time-inputs">
+              <label>
+                <span id="start-time-label-text">Departure time</span> <span class="label-required"
+                  aria-hidden="true">*</span>
                 <input type="time" name="startTime" required step="60" lang="en-GB" />
               </label>
-              <label>
+              <label id="end-time-label" hidden>
                 Latest departure <span class="label-required" aria-hidden="true">*</span>
-                <input type="time" name="endTime" required step="60" lang="en-GB" />
+                <input type="time" name="endTime" step="60" lang="en-GB" />
               </label>
             </div>
           </div>
@@ -136,6 +167,7 @@
   </div>
 
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.js"></script>
+  <script src="footer.js"></script>
   <script src="app.js"></script>
 </body>
 
