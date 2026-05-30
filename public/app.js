@@ -1350,6 +1350,11 @@ function setupNotificationsDropdown() {
       document.querySelectorAll('[data-notifications-toggle]');
   if (!toggleButtons.length) return;
 
+  // Show mobile bell buttons (hidden by default until auth confirmed)
+  document.querySelectorAll('.mobile-notifications-bell').forEach((bell) => {
+    bell.dataset.authVisible = 'true';
+  });
+
   const dropdown = createNotificationsDropdown();
   document.body.appendChild(dropdown);
 
@@ -1391,6 +1396,13 @@ function setupNotificationsDropdown() {
       dropdown.classList.remove('open');
     }
   });
+
+  // Close on scroll
+  window.addEventListener('scroll', () => {
+    if (dropdown.classList.contains('open')) {
+      dropdown.classList.remove('open');
+    }
+  }, {passive: true});
 
   // Mark single notification as read
   function handleNotificationTap(event) {
@@ -1902,6 +1914,9 @@ function setupMobileMenus() {
     menuButtons.forEach((menuButton) => {
       menuButton.classList.toggle(
           'mobile-menu-button-scroll-hidden', !isVisible);
+    });
+    document.querySelectorAll('.mobile-notifications-bell').forEach((bell) => {
+      bell.classList.toggle('mobile-menu-button-scroll-hidden', !isVisible);
     });
   };
 

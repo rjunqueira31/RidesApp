@@ -2197,11 +2197,20 @@ body[data-page="messages"] > .shell {
   padding-top: 0.65rem;
   border-radius: 50%;
   line-height: 0;
+  transition: opacity 0.25s ease, transform 0.25s ease;
 }
 
 .mobile-notifications-bell:hover {
   color: var(--text);
   background: var(--accent-soft);
+}
+
+.mobile-notifications-bell:focus,
+.mobile-notifications-bell:active {
+  background: none;
+  box-shadow: none;
+  transform: none;
+  outline: none;
 }
 
 .mobile-notifications-bell .nav-notifications-badge {
@@ -2310,10 +2319,21 @@ body[data-page="messages"] > .shell {
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
   transition: background 0.15s;
+  box-shadow: none;
+  transform: none;
 }
 
 .notifications-mark-all-button:hover {
   background: var(--accent-soft);
+  transform: none;
+  box-shadow: none;
+}
+
+.notifications-mark-all-button:active,
+.notifications-mark-all-button:focus {
+  background: none;
+  transform: none;
+  box-shadow: none;
 }
 
 .dm-user-card-button {
@@ -3098,7 +3118,7 @@ body[data-page="messages"] > .shell {
     right: 0.6rem;
   }
 
-  .mobile-notifications-bell {
+  .mobile-notifications-bell[data-auth-visible] {
     display: inline-flex;
     position: fixed;
     top: 1.35rem;
